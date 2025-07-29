@@ -22,7 +22,7 @@ interface IPoolManager {
     /// @notice Returns the vault address for a registered asset, or address(0) if none
     function getVault(address asset) external view returns (address);
 
-     /// @notice Returns the xToken address for a registered asset, or address(0) if none
+    /// @notice Returns the xToken address for a registered asset, or address(0) if none
     function getAssetToXToken(address asset) external view returns (address);
 
     /// @notice Returns list of all registered asset addresses

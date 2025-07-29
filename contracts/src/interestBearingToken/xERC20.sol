@@ -6,7 +6,10 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @title xERC20 - mintable/burnable token controlled by pool only
 contract xERC20 is ERC20, Ownable {
-    constructor(string memory name_, string memory symbol_, address poolManager) ERC20(name_, symbol_) Ownable(poolManager) {}
+    constructor(string memory name_, string memory symbol_, address poolManager)
+        ERC20(name_, symbol_)
+        Ownable(poolManager)
+    {}
 
     /// @notice Mint xERC20 tokens to a specified address (onlyOwner = pool)
     function mint(address to, uint256 amount) external onlyOwner {

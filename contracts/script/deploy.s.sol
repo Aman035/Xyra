@@ -20,7 +20,7 @@ contract Deploy is Script {
     // Add supported tokens here
     address[] public tokens = [
         0x0000000000000000000000000000000000000001, // Example token 1
-        0x0000000000000000000000000000000000000002  // Example token 2
+        0x0000000000000000000000000000000000000002 // Example token 2
     ];
 
     address public pyth = 0x0000000000000000000000000000000000000003; // TODO: Update pyth address
@@ -37,7 +37,7 @@ contract Deploy is Script {
             0.01e27, // baseRate (1%)
             0.1e27, // rateMultiplier (10%)
             0.8e27, // optimalUtilization (80%)
-            2e27    // jumpMultiplier (200%)
+            2e27 // jumpMultiplier (200%)
         );
         collateralManager = new CollateralManager(address(acm));
         poolManager = new PoolManager(address(acm));
@@ -72,8 +72,8 @@ contract Deploy is Script {
             token,
             0.75e18, // ltv
             0.85e18, // liquidation threshold
-            1e18,    // liquidation bonus
-            true     // isActive
-        ); 
+            1e18, // liquidation bonus
+            true // isActive
+        );
     }
 }

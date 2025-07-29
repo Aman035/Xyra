@@ -129,20 +129,8 @@ contract LendingPoolTest is Test {
         vm.startPrank(charlie);
         priceOracle.setAssetPrice(address(usdc), 1e18);
         priceOracle.setAssetPrice(address(dai), 1e18);
-        collateralManager.setCollateralConfig(
-            address(usdc),
-            0.75e18,
-            0.85e18,
-            1e18,
-            true
-        );
-        collateralManager.setCollateralConfig(
-            address(dai),
-            0.75e18,
-            0.85e18,
-            1e18,
-            true
-        );
+        collateralManager.setCollateralConfig(address(usdc), 0.75e18, 0.85e18, 1e18, true);
+        collateralManager.setCollateralConfig(address(dai), 0.75e18, 0.85e18, 1e18, true);
         vm.stopPrank();
     }
 
@@ -189,13 +177,7 @@ contract LendingPoolTest is Test {
         vm.startPrank(charlie);
         priceOracle.setAssetPrice(asset, 1e18); // $1
         priceOracle.setAssetPrice(address(dai), 1e18); // $1
-        collateralManager.setCollateralConfig(
-            asset,
-            0.75e18,
-            0.85e18,
-            1e18,
-            true
-        ); // ✅ New (1e18)
+        collateralManager.setCollateralConfig(asset, 0.75e18, 0.85e18, 1e18, true); // ✅ New (1e18)
         vm.stopPrank();
 
         uint256 aliceBorrowAssetBalanceBefore = usdc.balanceOf(alice);
@@ -207,10 +189,7 @@ contract LendingPoolTest is Test {
 
         uint256 aliceBorrowAssetBalanceAfter = usdc.balanceOf(alice);
 
-        assertEq(
-            aliceBorrowAssetBalanceAfter,
-            aliceBorrowAssetBalanceBefore + borrowAmount
-        );
+        assertEq(aliceBorrowAssetBalanceAfter, aliceBorrowAssetBalanceBefore + borrowAmount);
         assertEq(lendingPool.getUserTotalDebt(alice), borrowAmount * 1e12); // scaled to 18 decimals
 
         // Repay half
@@ -232,13 +211,7 @@ contract LendingPoolTest is Test {
 
         vm.startPrank(charlie);
         priceOracle.setAssetPrice(asset, 1e18);
-        collateralManager.setCollateralConfig(
-            asset,
-            0.75e18,
-            0.85e18,
-            1e18,
-            true
-        ); // ✅ New (1e18)
+        collateralManager.setCollateralConfig(asset, 0.75e18, 0.85e18, 1e18, true); // ✅ New (1e18)
         vm.stopPrank();
 
         // Borrow 700 USDC
@@ -263,13 +236,7 @@ contract LendingPoolTest is Test {
 
         vm.startPrank(charlie);
         priceOracle.setAssetPrice(asset, 1e18);
-        collateralManager.setCollateralConfig(
-            asset,
-            0.75e18,
-            0.85e18,
-            1e18,
-            true
-        ); // ✅ New (1e18)
+        collateralManager.setCollateralConfig(asset, 0.75e18, 0.85e18, 1e18, true); // ✅ New (1e18)
         vm.stopPrank();
 
         vm.startPrank(alice);
@@ -282,10 +249,7 @@ contract LendingPoolTest is Test {
         uint256 aliceAssetBalanceAfterWithdraw = usdc.balanceOf(alice);
 
         // Confirm user got tokens back
-        assertGe(
-            aliceAssetBalanceAfterWithdraw,
-            aliceAssetBalanceBeforeWithdraw + 500 * 1e6
-        );
+        assertGe(aliceAssetBalanceAfterWithdraw, aliceAssetBalanceBeforeWithdraw + 500 * 1e6);
     }
 
     function testBorrowFailsAboveLTV() public {
@@ -296,13 +260,7 @@ contract LendingPoolTest is Test {
 
         vm.startPrank(charlie);
         priceOracle.setAssetPrice(asset, 1e18); // $1
-        collateralManager.setCollateralConfig(
-            asset,
-            0.75e18,
-            0.85e18,
-            1e18,
-            true
-        ); // ✅ New (1e18) // LTV: 75%
+        collateralManager.setCollateralConfig(asset, 0.75e18, 0.85e18, 1e18, true); // ✅ New (1e18) // LTV: 75%
         vm.stopPrank();
 
         uint256 borrowAmount = 800 * 1e6; // >75% of $1000 collateral
@@ -322,13 +280,7 @@ contract LendingPoolTest is Test {
 
         vm.startPrank(charlie);
         priceOracle.setAssetPrice(asset, 1e18);
-        collateralManager.setCollateralConfig(
-            asset,
-            0.75e18,
-            0.85e18,
-            1e18,
-            true
-        ); // ✅ New (1e18) // 75% LTV, 85% liq
+        collateralManager.setCollateralConfig(asset, 0.75e18, 0.85e18, 1e18, true); // ✅ New (1e18) // 75% LTV, 85% liq
         vm.stopPrank();
 
         vm.startPrank(alice);
@@ -342,13 +294,7 @@ contract LendingPoolTest is Test {
 
         vm.startPrank(charlie);
         priceOracle.setAssetPrice(asset, 1e18); // $1
-        collateralManager.setCollateralConfig(
-            asset,
-            0.75e18,
-            0.85e18,
-            1e18,
-            true
-        ); // ✅ New (1e18) // 75% LTV, 85% liq
+        collateralManager.setCollateralConfig(asset, 0.75e18, 0.85e18, 1e18, true); // ✅ New (1e18) // 75% LTV, 85% liq
         vm.stopPrank();
 
         // Borrow 740 USDC (just under 75%)
@@ -369,13 +315,7 @@ contract LendingPoolTest is Test {
 
         vm.startPrank(charlie);
         priceOracle.setAssetPrice(asset, 1e18);
-        collateralManager.setCollateralConfig(
-            asset,
-            0.75e18,
-            0.85e18,
-            1e18,
-            true
-        ); // ✅ New (1e18)
+        collateralManager.setCollateralConfig(asset, 0.75e18, 0.85e18, 1e18, true); // ✅ New (1e18)
         vm.stopPrank();
 
         // Borrow 600 USDC
@@ -406,10 +346,7 @@ contract LendingPoolTest is Test {
         uint256 borrowAmount = 400 * 1e18;
         _borrowDAI(alice, borrowAmount);
 
-        assertEq(
-            dai.balanceOf(alice),
-            aliceDaiBalanceBeforeWithdraw + borrowAmount
-        );
+        assertEq(dai.balanceOf(alice), aliceDaiBalanceBeforeWithdraw + borrowAmount);
         uint256 aliceDebt = lendingPool.getUserTotalDebt(alice);
         assertGt(aliceDebt, 0);
     }
@@ -437,10 +374,7 @@ contract LendingPoolTest is Test {
         lendingPool.withdraw(address(usdc), withdrawAmount, alice);
         vm.stopPrank();
 
-        assertEq(
-            usdc.balanceOf(alice),
-            10000 * 1e6 - 1000 * 1e6 + withdrawAmount
-        ); // started with 10000, supplied 1000, withdrew 200
+        assertEq(usdc.balanceOf(alice), 10000 * 1e6 - 1000 * 1e6 + withdrawAmount); // started with 10000, supplied 1000, withdrew 200
     }
 
     function testAliceBorrowsDAIAgainstUSDC() public {
@@ -454,10 +388,7 @@ contract LendingPoolTest is Test {
         vm.stopPrank();
 
         // Check DAI balance increased
-        assertEq(
-            dai.balanceOf(alice),
-            aliceDaiBalanceBeforeWithdraw + daiBorrowAmount
-        );
+        assertEq(dai.balanceOf(alice), aliceDaiBalanceBeforeWithdraw + daiBorrowAmount);
 
         // Check debt accounting (scaled to 18 decimals)
         assertEq(lendingPool.getUserTotalDebt(alice), daiBorrowAmount);

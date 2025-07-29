@@ -4,7 +4,6 @@ pragma solidity ^0.8.20;
 import "../protocol/BaseContract.sol";
 import "../interfaces/IInterestRateModel.sol";
 
-
 /// @title Interest Rate Manager for Dynamic Borrow/Supply Rate Calculations Across Pools
 /// @author
 /// @notice Calculates the current borrow and supply interest rates based on pool utilization.
@@ -14,16 +13,16 @@ import "../interfaces/IInterestRateModel.sol";
 contract InterestRateManager is IInterestRateModel, BaseContract {
     // All rates are in ray (1e27)
     uint256 private constant RAY = 1e27;
-    
+
     // Base rate when utilization is 0
     uint256 public baseRate;
-    
+
     // Rate multiplier for utilization
     uint256 public rateMultiplier;
-    
+
     // Optimal utilization point
     uint256 public optimalUtilization;
-    
+
     // Jump multiplier when utilization > optimal
     uint256 public jumpMultiplier;
 
@@ -41,19 +40,14 @@ contract InterestRateManager is IInterestRateModel, BaseContract {
     ) BaseContract(_acm) {
         require(_baseRate < RAY, "Base rate too high");
         require(_optimalUtilization < RAY, "Optimal utilization too high");
-        
+
         baseRate = _baseRate;
         rateMultiplier = _rateMultiplier;
         optimalUtilization = _optimalUtilization;
         jumpMultiplier = _jumpMultiplier;
     }
 
-    function getBorrowRate(uint256 utilization) 
-        external 
-        view 
-        override 
-        returns (uint256) 
-    {
+    function getBorrowRate(uint256 utilization) external view override returns (uint256) {
         if (utilization <= optimalUtilization) {
             // Normal rate curve below optimal utilization
             return baseRate + (utilization * rateMultiplier) / RAY;
@@ -65,12 +59,7 @@ contract InterestRateManager is IInterestRateModel, BaseContract {
         }
     }
 
-    function getSupplyRate(uint256 utilization, uint256 borrowRate) 
-        external 
-        view 
-        override 
-        returns (uint256) 
-    {
+    function getSupplyRate(uint256 utilization, uint256 borrowRate) external view override returns (uint256) {
         // Supply rate = borrowRate * utilization * (1 - reserveFactor)
         // For simplicity, we're using 90% of the borrow rate (10% reserve factor)
         return (borrowRate * utilization * 9) / (10 * RAY);

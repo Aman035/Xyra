@@ -30,11 +30,7 @@ contract PoolManager is IPoolManager, BaseContract {
     constructor(address _acm) BaseContract(_acm) {}
 
     /// @notice Deploys a new ERC4626 vault and xERC20 token for an asset and registers them
-    function createVault(address asset)
-        external
-        onlyPoolManager
-        returns (address vaultAddr, address xTokenAddr)
-    {
+    function createVault(address asset) external onlyPoolManager returns (address vaultAddr, address xTokenAddr) {
         require(asset != address(0), "Invalid asset address");
         require(assetToVault[asset] == address(0), "Pool already exists");
         require(lendingPool != address(0), "Pool is not set in the manager");
@@ -63,10 +59,7 @@ contract PoolManager is IPoolManager, BaseContract {
     }
 
     /// @notice Enables or disables collateral status for a registered asset
-    function setCollateralStatus(address asset, bool isEnabled)
-        external
-        onlyPoolManager
-    {
+    function setCollateralStatus(address asset, bool isEnabled) external onlyPoolManager {
         require(asset != address(0), "Invalid asset address");
         require(assetToVault[asset] != address(0), "Pool does not exist");
 
@@ -75,11 +68,7 @@ contract PoolManager is IPoolManager, BaseContract {
     }
 
     /// @notice Returns whether the given asset is enabled as collateral
-    function isCollateralEnabled(address asset)
-        external
-        view
-        returns (bool)
-    {
+    function isCollateralEnabled(address asset) external view returns (bool) {
         return assetCollateralStatus[asset];
     }
 
@@ -88,7 +77,7 @@ contract PoolManager is IPoolManager, BaseContract {
         return allAssets;
     }
 
-        /// @notice Returns true if the asset is registered and supported
+    /// @notice Returns true if the asset is registered and supported
     function isAssetSupported(address asset) external view returns (bool) {
         return assetToVault[asset] != address(0);
     }
