@@ -37,7 +37,8 @@ contract Deploy is Script {
             0.01e27, // baseRate (1%)
             0.1e27, // rateMultiplier (10%)
             0.8e27, // optimalUtilization (80%)
-            2e27 // jumpMultiplier (200%)
+            2e27,    // jumpMultiplier (200%)
+            1e26 // reserveFactor (10%)
         );
         collateralManager = new CollateralManager(address(acm));
         poolManager = new PoolManager(address(acm));
