@@ -4,18 +4,22 @@ import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  ArrowLeftIcon,
-  InfoIcon,
-  TrendingUpIcon,
-  CheckCircleIcon,
-  GlobeIcon,
-} from 'lucide-react'
-import Link from 'next/link'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
+import { InfoIcon, TrendingUpIcon, GlobeIcon } from 'lucide-react'
 
-const SUPPLY_ASSETS = [
+type Asset = {
+  symbol: string
+  name: string
+  icon: string
+  balance: string // may include commas
+  apy: string // e.g. "4.25%"
+  supplied: string
+  price: string
+  totalSupplied: string
+  chains: string[]
+}
+
+const SUPPLY_ASSETS: Asset[] = [
   {
     symbol: 'USDC',
     name: 'USD Coin',
@@ -62,19 +66,20 @@ const SUPPLY_ASSETS = [
   },
 ]
 
+// --- helpers (no UI changes)
+const toNumber = (v: string) => Number.parseFloat(v.replace(/,/g, ''))
+const apyToFloat = (apy: string) =>
+  Number.parseFloat(apy.replace('%', '')) / 100
+
 export default function SupplyPage() {
-  const [selectedAsset, setSelectedAsset] = useState<
-    (typeof SUPPLY_ASSETS)[0] | null
-  >(null)
-  const [supplyAmount, setSupplyAmount] = useState('')
-  const [isSupplying, setIsSupplying] = useState(false)
+  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null)
+  const [supplyAmount, setSupplyAmount] = useState<string>('') // keep as string for the input
+  const [isSupplying, setIsSupplying] = useState<boolean>(false)
 
   const handleSupply = async () => {
     if (!selectedAsset || !supplyAmount) return
-
     setIsSupplying(true)
-    // Simulate transaction
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    await new Promise((r) => setTimeout(r, 2000)) // simulate tx
     setIsSupplying(false)
     setSupplyAmount('')
     setSelectedAsset(null)
@@ -82,10 +87,23 @@ export default function SupplyPage() {
 
   const calculateEarnings = () => {
     if (!selectedAsset || !supplyAmount) return '0.00'
-    const amount = Number.parseFloat(supplyAmount)
-    const apy = Number.parseFloat(selectedAsset.apy.replace('%', '')) / 100
+    const amount = toNumber(supplyAmount)
+    if (Number.isNaN(amount) || amount <= 0) return '0.00'
+    const apy = apyToFloat(selectedAsset.apy)
     return ((amount * apy) / 365).toFixed(6)
   }
+
+  const setMax = () => {
+    if (!selectedAsset) return
+    // ensure numeric format without commas for <input type="number" />
+    setSupplyAmount(String(toNumber(selectedAsset.balance)))
+  }
+
+  const disableSubmit =
+    !supplyAmount ||
+    Number.isNaN(toNumber(supplyAmount)) ||
+    toNumber(supplyAmount) <= 0 ||
+    isSupplying
 
   return (
     <main className="container mx-auto px-6 py-8">
@@ -101,21 +119,6 @@ export default function SupplyPage() {
         </div>
 
         <Tabs defaultValue="supply" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-gray-800 border-gray-700">
-            <TabsTrigger
-              value="supply"
-              className="text-gray-300 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
-            >
-              Supply Assets
-            </TabsTrigger>
-            <TabsTrigger
-              value="positions"
-              className="text-gray-300 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
-            >
-              Your Positions
-            </TabsTrigger>
-          </TabsList>
-
           <TabsContent value="supply" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Asset Selection */}
@@ -128,55 +131,61 @@ export default function SupplyPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      {SUPPLY_ASSETS.map((asset) => (
-                        <div
-                          key={asset.symbol}
-                          className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                            selectedAsset?.symbol === asset.symbol
-                              ? 'border-blue-500 bg-blue-500/10'
-                              : 'border-gray-700 bg-gray-800/50 hover:bg-gray-800'
-                          }`}
-                          onClick={() => setSelectedAsset(asset)}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-4">
-                              <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center text-white text-lg">
-                                {asset.icon}
-                              </div>
-                              <div>
-                                <div className="text-white font-bold text-lg">
-                                  {asset.symbol}
+                      {SUPPLY_ASSETS.map((asset) => {
+                        const isSelected =
+                          selectedAsset?.symbol === asset.symbol
+                        return (
+                          <div
+                            key={asset.symbol}
+                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                              isSelected
+                                ? 'border-blue-500 bg-blue-500/10'
+                                : 'border-gray-700 bg-gray-800/50 hover:bg-gray-800'
+                            }`}
+                            onClick={() => setSelectedAsset(asset)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-4">
+                                <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center text-white text-lg">
+                                  {asset.icon}
                                 </div>
-                                <div className="text-gray-400">
-                                  {asset.name}
+                                <div>
+                                  <div className="text-white font-bold text-lg">
+                                    {asset.symbol}
+                                  </div>
+                                  <div className="text-gray-400">
+                                    {asset.name}
+                                  </div>
+                                  <div className="flex items-center space-x-1 mt-1">
+                                    <GlobeIcon className="h-3 w-3 text-cyan-400" />
+                                    <span className="text-xs text-cyan-400">
+                                      {asset.chains.length} chains
+                                    </span>
+                                  </div>
                                 </div>
-                                <div className="flex items-center space-x-1 mt-1">
-                                  <GlobeIcon className="h-3 w-3 text-cyan-400" />
-                                  <span className="text-xs text-cyan-400">
-                                    {asset.chains.length} chains
-                                  </span>
+                              </div>
+
+                              <div className="text-right">
+                                <div className="text-green-400 font-bold text-lg">
+                                  {asset.apy}
+                                </div>
+                                <div className="text-gray-400 text-sm">
+                                  Supply APY
                                 </div>
                               </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-green-400 font-bold text-lg">
-                                {asset.apy}
-                              </div>
-                              <div className="text-gray-400 text-sm">
-                                Supply APY
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-white font-medium">
-                                {asset.balance} {asset.symbol}
-                              </div>
-                              <div className="text-gray-400 text-sm">
-                                Available
+
+                              <div className="text-right">
+                                <div className="text-white font-medium">
+                                  {asset.balance} {asset.symbol}
+                                </div>
+                                <div className="text-gray-400 text-sm">
+                                  Available
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </CardContent>
                 </Card>
@@ -218,9 +227,7 @@ export default function SupplyPage() {
                               variant="ghost"
                               size="sm"
                               className="text-blue-400 hover:text-blue-300 p-0 h-auto"
-                              onClick={() =>
-                                setSupplyAmount(selectedAsset.balance)
-                              }
+                              onClick={setMax}
                             >
                               MAX
                             </Button>
@@ -269,11 +276,7 @@ export default function SupplyPage() {
 
                         <Button
                           onClick={handleSupply}
-                          disabled={
-                            !supplyAmount ||
-                            Number.parseFloat(supplyAmount) <= 0 ||
-                            isSupplying
-                          }
+                          disabled={disableSubmit}
                           className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3"
                         >
                           {isSupplying ? (
@@ -300,83 +303,6 @@ export default function SupplyPage() {
                 </Card>
               </div>
             </div>
-          </TabsContent>
-
-          <TabsContent value="positions" className="space-y-6">
-            <Card className="bg-gray-900 border-gray-800">
-              <CardHeader>
-                <CardTitle className="text-white font-heading">
-                  Your Supply Positions
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {/* Mock positions */}
-                  <div className="p-4 rounded-lg bg-gray-800">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white">
-                          💰
-                        </div>
-                        <div>
-                          <div className="text-white font-bold">USDC</div>
-                          <div className="text-gray-400 text-sm">
-                            Supplied 30 days ago
-                          </div>
-                          <div className="flex items-center space-x-1 mt-1">
-                            <GlobeIcon className="h-3 w-3 text-cyan-400" />
-                            <span className="text-xs text-cyan-400">
-                              3 chains
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-white font-bold">500.00 USDC</div>
-                        <div className="text-green-400 text-sm">
-                          +1.75 USDC earned
-                        </div>
-                      </div>
-                      <Badge className="bg-green-600 text-white">Active</Badge>
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-gray-800">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white">
-                          ⟠
-                        </div>
-                        <div>
-                          <div className="text-white font-bold">ETH</div>
-                          <div className="text-gray-400 text-sm">
-                            Supplied 15 days ago
-                          </div>
-                          <div className="flex items-center space-x-1 mt-1">
-                            <GlobeIcon className="h-3 w-3 text-cyan-400" />
-                            <span className="text-xs text-cyan-400">
-                              3 chains
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-white font-bold">1.25 ETH</div>
-                        <div className="text-green-400 text-sm">
-                          +0.0198 ETH earned
-                        </div>
-                      </div>
-                      <Badge className="bg-green-600 text-white">Active</Badge>
-                    </div>
-                  </div>
-
-                  <div className="text-center py-8 text-gray-400">
-                    <CheckCircleIcon className="h-12 w-12 mx-auto mb-4 text-green-400" />
-                    <p>You're earning yield across multiple chains!</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
         </Tabs>
       </div>

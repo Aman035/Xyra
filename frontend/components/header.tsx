@@ -143,9 +143,6 @@ export default function Header() {
             <Link href="/portfolio" className={linkClass('/portfolio')}>
               Portfolio
             </Link>
-            <Link href="/markets" className={linkClass('/markets')}>
-              Markets
-            </Link>
           </nav>
 
           {/* Wallet */}
