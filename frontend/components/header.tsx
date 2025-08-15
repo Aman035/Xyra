@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import { useSolanaWallets } from '@privy-io/react-auth/solana'
 import { Button } from '@/components/ui/button'
@@ -12,17 +13,19 @@ import {
   SOLANA_CLUSTER_LABEL,
   labelForChainId,
 } from '@/lib/chains'
+import { cn } from '@/lib/utils' // if you have it; otherwise use template strings
 
 function shortAddr(addr?: string) {
   return addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : ''
 }
 
 export default function Header() {
+  const pathname = usePathname()
   const { ready, authenticated, user, login, logout } = usePrivy()
   const { wallets: evmWallets } = useWallets()
   const { wallets: solWallets } = useSolanaWallets()
 
-  // Merge EVM + Solana so we can find the connected wallet by address
+  // --- find the connected wallet across EVM + Solana
   const allWallets = useMemo(() => {
     const evm = (evmWallets as any[]).map((w) => ({
       ...w,
@@ -44,7 +47,7 @@ export default function Header() {
 
   const address = connectedWallet?.address ?? ''
 
-  // Chain label + wrong-network (EVM only)
+  // --- chain label + wrong-network (EVM only)
   const [chainLabel, setChainLabel] = useState<string>('')
   const [wrongNet, setWrongNet] = useState<boolean>(false)
 
@@ -57,7 +60,6 @@ export default function Header() {
       return
     }
 
-    // EVM: read chainId from provider
     let cleanup: (() => void) | undefined
     ;(async () => {
       const provider = await (connectedWallet as any)?.getEthereumProvider?.()
@@ -82,9 +84,13 @@ export default function Header() {
     return () => cleanup?.()
   }, [ready, authenticated, connectedWallet])
 
+  // --- copy with feedback
+  const [copied, setCopied] = useState(false)
   async function copy() {
     if (!address) return
     await navigator.clipboard?.writeText(address)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 600)
   }
 
   async function switchTo(chainId: number) {
@@ -94,6 +100,23 @@ export default function Header() {
       console.warn('switch failed', e)
     }
   }
+
+  // active-link helper
+  const isActive = (href: string) => {
+    if (href === '/') return pathname === '/'
+    return pathname.startsWith(href)
+  }
+
+  const linkClass = (href: string) =>
+    cn?.(
+      'transition-colors',
+      isActive(href)
+        ? 'text-white font-medium'
+        : 'text-gray-400 hover:text-white'
+    ) ||
+    (isActive(href)
+      ? 'text-white font-medium'
+      : 'text-gray-400 hover:text-white')
 
   return (
     <header className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm">
@@ -111,19 +134,19 @@ export default function Header() {
 
           {/* Nav */}
           <nav className="hidden items-center space-x-8 md:flex">
-            <Link href="/" className="font-medium text-white">
+            <Link href="/" className={linkClass('/')}>
               Dashboard
             </Link>
-            <Link href="/supply" className="text-gray-400 hover:text-white">
+            <Link href="/supply" className={linkClass('/supply')}>
               Supply
             </Link>
-            <Link href="/borrow" className="text-gray-400 hover:text-white">
+            <Link href="/borrow" className={linkClass('/borrow')}>
               Borrow
             </Link>
-            <Link href="/portfolio" className="text-gray-400 hover:text-white">
+            <Link href="/portfolio" className={linkClass('/portfolio')}>
               Portfolio
             </Link>
-            <Link href="/markets" className="text-gray-400 hover:text-white">
+            <Link href="/markets" className={linkClass('/markets')}>
               Markets
             </Link>
           </nav>
@@ -143,7 +166,7 @@ export default function Header() {
               </Button>
             ) : (
               <>
-                {/* Chain chip (inline, subtle) */}
+                {/* Chain chip (inline) */}
                 <div
                   className={[
                     'hidden md:flex items-center gap-1 rounded-md border px-2 py-1 text-xs',
@@ -175,15 +198,15 @@ export default function Header() {
                   )}
                 </div>
 
-                {/* Address (copy) */}
+                {/* Address (copy with feedback) */}
                 <Button
                   variant="outline"
                   className="cursor-pointer font-mono"
                   onClick={copy}
                   title="Click to copy address"
-                  aria-label="Click to copy address"
+                  aria-live="polite"
                 >
-                  {shortAddr(address) || 'Account'}
+                  {copied ? 'Copied!' : shortAddr(address) || 'Account'}
                 </Button>
 
                 <Button
