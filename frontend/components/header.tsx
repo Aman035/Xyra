@@ -134,9 +134,6 @@ export default function Header() {
 
           {/* Nav */}
           <nav className="hidden items-center space-x-8 md:flex">
-            <Link href="/" className={linkClass('/')}>
-              Dashboard
-            </Link>
             <Link href="/supply" className={linkClass('/supply')}>
               Supply
             </Link>
