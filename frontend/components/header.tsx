@@ -7,17 +7,22 @@ import { usePrivy, useWallets } from '@privy-io/react-auth'
 import { useSolanaWallets } from '@privy-io/react-auth/solana'
 import { Button } from '@/components/ui/button'
 import { Link2 } from 'lucide-react'
-import {
-  ALLOWED_EVM_IDS,
-  EVM_CHAINS,
-  SOLANA_CLUSTER_LABEL,
-  labelForChainId,
-} from '@/lib/chains'
-import { cn } from '@/lib/utils' // if you have it; otherwise use template strings
+import { CHAINS, VM } from '@/lib/chains'
+import { cn } from '@/lib/utils'
 
 function shortAddr(addr?: string) {
   return addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : ''
 }
+
+// derive helpers from CHAINS
+const ALL = Object.values(CHAINS)
+const ALLOWED_EVM_IDS = new Set<number>(
+  ALL.filter((c) => c.vm === VM.EVM).map((c) => c.id)
+)
+const LABELS = new Map<number, string>(ALL.map((c) => [c.id, c.label] as const))
+const SEPOLIA = CHAINS.sepolia
+const BASE_SEPOLIA = CHAINS.baseSepolia
+const SOLANA_LABEL = CHAINS.solDevnet.label
 
 export default function Header() {
   const pathname = usePathname()
@@ -25,7 +30,7 @@ export default function Header() {
   const { wallets: evmWallets } = useWallets()
   const { wallets: solWallets } = useSolanaWallets()
 
-  // --- find the connected wallet across EVM + Solana
+  // find the connected wallet across EVM + Solana
   const allWallets = useMemo(() => {
     const evm = (evmWallets as any[]).map((w) => ({
       ...w,
@@ -47,7 +52,7 @@ export default function Header() {
 
   const address = connectedWallet?.address ?? ''
 
-  // --- chain label + wrong-network (EVM only)
+  // chain label + wrong-network (EVM only)
   const [chainLabel, setChainLabel] = useState<string>('')
   const [wrongNet, setWrongNet] = useState<boolean>(false)
 
@@ -55,11 +60,12 @@ export default function Header() {
     if (!ready || !authenticated) return
 
     if ((connectedWallet as any)?.chainType === 'solana') {
-      setChainLabel(SOLANA_CLUSTER_LABEL)
+      setChainLabel(SOLANA_LABEL)
       setWrongNet(false)
       return
     }
 
+    // EVM: track chain id from provider
     let cleanup: (() => void) | undefined
     ;(async () => {
       const provider = await (connectedWallet as any)?.getEthereumProvider?.()
@@ -67,14 +73,16 @@ export default function Header() {
 
       const apply = (hex: string) => {
         const id = parseInt(hex, 16)
-        setChainLabel(labelForChainId(id))
+        setChainLabel(LABELS.get(id) ?? `Chain ${id}`)
         setWrongNet(!ALLOWED_EVM_IDS.has(id))
       }
 
       try {
         const hex = await provider.request({ method: 'eth_chainId' })
         apply(hex)
-      } catch {}
+      } catch {
+        // ignore
+      }
 
       const onChange = (nextHex: string) => apply(nextHex)
       provider.on?.('chainChanged', onChange)
@@ -84,7 +92,7 @@ export default function Header() {
     return () => cleanup?.()
   }, [ready, authenticated, connectedWallet])
 
-  // --- copy with feedback
+  // copy with feedback
   const [copied, setCopied] = useState(false)
   async function copy() {
     if (!address) return
@@ -102,11 +110,8 @@ export default function Header() {
   }
 
   // active-link helper
-  const isActive = (href: string) => {
-    if (href === '/') return pathname === '/'
-    return pathname.startsWith(href)
-  }
-
+  const isActive = (href: string) =>
+    href === '/' ? pathname === '/' : pathname.startsWith(href)
   const linkClass = (href: string) =>
     cn?.(
       'transition-colors',
@@ -176,17 +181,17 @@ export default function Header() {
                         size="sm"
                         variant="secondary"
                         className="h-6 px-2"
-                        onClick={() => switchTo(EVM_CHAINS.sepolia.id)}
+                        onClick={() => switchTo(SEPOLIA.id)}
                       >
-                        Switch: {EVM_CHAINS.sepolia.name}
+                        Switch: {SEPOLIA.label}
                       </Button>
                       <Button
                         size="sm"
                         variant="secondary"
                         className="h-6 px-2"
-                        onClick={() => switchTo(EVM_CHAINS.baseSepolia.id)}
+                        onClick={() => switchTo(BASE_SEPOLIA.id)}
                       >
-                        Switch: {EVM_CHAINS.baseSepolia.name}
+                        Switch: {BASE_SEPOLIA.label}
                       </Button>
                     </div>
                   )}

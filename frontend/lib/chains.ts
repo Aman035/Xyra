@@ -1,26 +1,71 @@
-// lib/chains.ts
+import { ASSETS } from '@/lib/assets'
 
-/** EVM testnets you support */
-export const EVM_CHAINS = {
-  sepolia: { id: 11155111, name: 'Sepolia' },
-  baseSepolia: { id: 84532, name: 'Base Sepolia' },
-} as const
-
-export const ALLOWED_EVM_IDS = new Set<number>([
-  EVM_CHAINS.sepolia.id,
-  EVM_CHAINS.baseSepolia.id,
-])
-
-export function labelForChainId(id: number) {
-  switch (id) {
-    case EVM_CHAINS.sepolia.id:
-      return EVM_CHAINS.sepolia.name
-    case EVM_CHAINS.baseSepolia.id:
-      return EVM_CHAINS.baseSepolia.name
-    default:
-      return `Chain ${id}`
-  }
+export enum VM {
+  EVM,
+  SVM,
 }
 
-/** Solana cluster label you use */
-export const SOLANA_CLUSTER_LABEL = 'Solana Devnet'
+export type Chain = {
+  id: number
+  vm: VM
+  label: string
+  /** Assets supported on this chain */
+  tokens: {
+    asset: (typeof ASSETS)[keyof typeof ASSETS]
+    zrcTokenAddress: string
+    address?: string
+  }[]
+}
+
+export const CHAINS: Record<'sepolia' | 'baseSepolia' | 'solDevnet', Chain> = {
+  sepolia: {
+    id: 11155111,
+    vm: VM.EVM,
+    label: 'Sepolia',
+    tokens: [
+      {
+        asset: ASSETS.ETH,
+        zrcTokenAddress: '0x05BA149A7bd6dC1F937fA9046A9e05C05f3b18b0',
+      },
+      {
+        asset: ASSETS.USDC,
+        zrcTokenAddress: '0xcC683A782f4B30c138787CB5576a86AF66fdc31d',
+        address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+      },
+    ],
+  },
+
+  baseSepolia: {
+    id: 84532,
+    vm: VM.EVM,
+    label: 'Base Sepolia',
+    tokens: [
+      {
+        asset: ASSETS.ETH,
+        zrcTokenAddress: '0x236b0DE675cC8F46AE186897fCCeFe3370C9eDeD',
+      },
+      {
+        asset: ASSETS.USDC,
+        zrcTokenAddress: '0xd0eFed75622e7AA4555EE44F296dA3744E3ceE19',
+        address: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+      },
+    ],
+  },
+
+  solDevnet: {
+    id: 0, // dummy id for Solana Devnet
+    vm: VM.SVM,
+    label: 'Solana Devnet',
+    tokens: [
+      {
+        asset: ASSETS.SOL,
+        zrcTokenAddress: '0xADF73ebA3Ebaa7254E859549A44c74eF7cff7501',
+      },
+      {
+        asset: ASSETS.USDC,
+        zrcTokenAddress: '0xD10932EB3616a937bd4a2652c87E9FeBbAce53e5',
+        address: 'Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr',
+      },
+    ],
+  },
+} as const
