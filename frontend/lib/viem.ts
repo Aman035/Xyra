@@ -25,7 +25,7 @@ type WriteArgs = {
 /**
  * Read a contract function on ZetaChain.
  */
-export const readZetaContract = async <T = unknown>({
+export const readContract = async <T = unknown>({
   rpcUrl = process.env.NEXT_PUBLIC_ZETA_RPC_URL || '',
   address = process.env.NEXT_PUBLIC_LENDING_POOL as HexAddr,
   abi = LENDING_POOL_ABI as Abi,
@@ -45,7 +45,7 @@ export const readZetaContract = async <T = unknown>({
  * Write (send tx) to a contract function on ZetaChain.
  * Pass a viem WalletClient as `signer` (already configured with account & chain).
  */
-export const writeZetaContract = async ({
+export const writeContract = async ({
   rpcUrl = process.env.NEXT_PUBLIC_ZETA_RPC_URL || '',
   signer,
   address = process.env.NEXT_PUBLIC_LENDING_POOL as HexAddr,

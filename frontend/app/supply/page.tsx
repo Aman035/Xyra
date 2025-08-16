@@ -12,7 +12,7 @@ import { Progress } from '@/components/ui/progress'
 
 import { VAULTS } from '@/lib/vaults'
 import { ERC20_ABI } from '@/lib/abis'
-import { readZetaContract } from '@/lib/zeta'
+import { readContract } from '@/lib/viem'
 import { formatUnits } from 'viem'
 import { CHAINS, VM } from '@/lib/chains'
 
@@ -81,7 +81,7 @@ export default function SupplyPage() {
             const decimals = 18
 
             // 2) TVL (underlying)
-            const totalAssets = await readZetaContract<bigint>({
+            const totalAssets = await readContract<bigint>({
               functionName: 'getTotalSupplied',
               args: [r.zrc20],
             })
@@ -92,7 +92,7 @@ export default function SupplyPage() {
             const tvlStr = `${tvlStrNum} ${r.symbol}`
 
             // 3) Utilization in RAY → %
-            const utilRay = await readZetaContract<bigint>({
+            const utilRay = await readContract<bigint>({
               functionName: '_calculateUtilization',
               args: [r.zrc20],
             })
@@ -100,7 +100,7 @@ export default function SupplyPage() {
               Number.parseFloat(formatUnits(utilRay, RAY_DECIMALS)) * 100
 
             // 4) Supply rate in RAY/year → APY %
-            const supplyRateRay = await readZetaContract<bigint>({
+            const supplyRateRay = await readContract<bigint>({
               functionName: 'getCurrentSupplyRate',
               args: [r.zrc20],
             })

@@ -18,7 +18,7 @@ import { Tooltip } from '@/components/ui/tooltip'
 
 import { VAULTS } from '@/lib/vaults'
 import { ERC20_ABI } from '@/lib/abis'
-import { readZetaContract } from '@/lib/zeta'
+import { readContract } from '@/lib/viem'
 import { formatUnits } from 'viem'
 import { CHAINS, VM } from '@/lib/chains'
 
@@ -103,7 +103,7 @@ export default function BorrowPage() {
             let decimals = 18
             // If your ZRC20s implement ERC20 decimals, uncomment:
             // try {
-            //   decimals = await readZetaContract<number>({
+            //   decimals = await readContract<number>({
             //     address: r.zrc20,
             //     functionName: 'decimals',
             //     abi: ERC20_ABI,
@@ -111,11 +111,11 @@ export default function BorrowPage() {
             // } catch {}
 
             // total supplied & borrowed (underlying units)
-            const totalSupplied = await readZetaContract<bigint>({
+            const totalSupplied = await readContract<bigint>({
               functionName: 'getTotalSupplied',
               args: [r.zrc20],
             })
-            const totalBorrowed = await readZetaContract<bigint>({
+            const totalBorrowed = await readContract<bigint>({
               functionName: 'getTotalBorrowed',
               args: [r.zrc20],
             })
@@ -138,7 +138,7 @@ export default function BorrowPage() {
                 : 0
 
             // borrow APY (RAY → %)
-            const borrowRateRay = await readZetaContract<bigint>({
+            const borrowRateRay = await readContract<bigint>({
               functionName: 'getCurrentBorrowRate',
               args: [r.zrc20],
             })
