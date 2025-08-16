@@ -15,7 +15,7 @@ import { ERC20_ABI } from '@/lib/abis'
 import { readZetaContract } from '@/lib/zeta'
 import { formatUnits } from 'viem'
 
-const RAY_DECIMALS = 27 // contract uses 1e27 scale
+const RAY_DECIMALS = 27
 
 type UiRow = {
   symbol: string
@@ -34,6 +34,14 @@ function pctLabel(n?: number | null, min = 2, max = 2) {
   if (n == null || !Number.isFinite(n)) return '—'
   if (n > 0 && n < 0.01) return '<0.01%'
   return `${n.toFixed(Math.min(Math.max(min, 0), Math.max(max, min)))}%`
+}
+
+// color the Progress bar’s *indicator* using Tailwind’s arbitrary child selector
+function utilBarClass(u: number | null) {
+  if (u == null) return ''
+  if (u >= 80) return 'bg-gray-800 [&>div]:bg-red-500'
+  if (u >= 50) return 'bg-gray-800 [&>div]:bg-amber-500'
+  return 'bg-gray-800 [&>div]:bg-emerald-500'
 }
 
 export default function SupplyPage() {
@@ -63,12 +71,6 @@ export default function SupplyPage() {
       const next = await Promise.all(
         rowsBase.map(async (r) => {
           try {
-            // 1) token decimals
-            // const decimals = await readZetaContract<number>({
-            //   address: r.zrc20,
-            //   functionName: 'decimals',
-            //   abi: ERC20_ABI,
-            // })
             const decimals = 18
 
             // 2) TVL (underlying)
@@ -77,9 +79,10 @@ export default function SupplyPage() {
               args: [r.zrc20],
             })
             const tvlNum = Number.parseFloat(formatUnits(totalAssets, decimals))
-            const tvlStr = tvlNum.toLocaleString(undefined, {
+            const tvlStrNum = tvlNum.toLocaleString(undefined, {
               maximumFractionDigits: 6,
             })
+            const tvlStr = `${tvlStrNum} ${r.symbol}`
 
             // 3) Utilization in RAY → %
             const utilRay = await readZetaContract<bigint>({
@@ -97,7 +100,6 @@ export default function SupplyPage() {
             const apyPct =
               Number.parseFloat(formatUnits(supplyRateRay, RAY_DECIMALS)) * 100
             const apyStr = pctLabel(apyPct)
-
             // // Debug (optional)
             // console.log({
             //   symbol: r.symbol,
@@ -144,7 +146,6 @@ export default function SupplyPage() {
     Number.parseFloat(supplyAmount) <= 0 ||
     isSupplying
 
-  // simple daily earnings estimate from APR (APY) for UX
   const calculateEarnings = () => {
     if (!selected || !selected.apyPct) return '0.00'
     const amt = Number.parseFloat(supplyAmount || '0')
@@ -279,7 +280,9 @@ export default function SupplyPage() {
                                 </span>
                               </div>
                               <Progress
-                                className="mt-1 h-2"
+                                className={`mt-1 h-2 ${utilBarClass(
+                                  v.utilizationPct
+                                )}`}
                                 value={
                                   v.utilizationPct === null
                                     ? 0
