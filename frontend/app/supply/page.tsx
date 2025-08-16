@@ -14,6 +14,7 @@ import { VAULTS } from '@/lib/vaults'
 import { ERC20_ABI } from '@/lib/abis'
 import { readZetaContract } from '@/lib/zeta'
 import { formatUnits } from 'viem'
+import { CHAINS, VM } from '@/lib/chains'
 
 const RAY_DECIMALS = 27
 
@@ -30,18 +31,24 @@ type UiRow = {
   loadingVault: boolean
 }
 
+type ChainKey = keyof typeof CHAINS
+
 function pctLabel(n?: number | null, min = 2, max = 2) {
   if (n == null || !Number.isFinite(n)) return '—'
   if (n > 0 && n < 0.01) return '<0.01%'
   return `${n.toFixed(Math.min(Math.max(min, 0), Math.max(max, min)))}%`
 }
 
-// color the Progress bar’s *indicator* using Tailwind’s arbitrary child selector
 function utilBarClass(u: number | null) {
   if (u == null) return ''
   if (u >= 80) return 'bg-gray-800 [&>div]:bg-red-500'
   if (u >= 50) return 'bg-gray-800 [&>div]:bg-amber-500'
   return 'bg-gray-800 [&>div]:bg-emerald-500'
+}
+
+/** TODO: replace with wallet chain (wagmi/viem) */
+function getCurrentChainKey(): ChainKey {
+  return 'sepolia'
 }
 
 export default function SupplyPage() {
@@ -137,40 +144,71 @@ export default function SupplyPage() {
   /** Form state */
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null)
   const selected = rows.find((r) => r.symbol === selectedSymbol) || null
+
   const [supplyAmount, setSupplyAmount] = useState('')
   const [isSupplying, setIsSupplying] = useState(false)
+
+  // Current chain + tokens (from CHAINS)
+  const currentChainKey = getCurrentChainKey()
+  const currentChain = CHAINS[currentChainKey]
+  const allowedTokens = currentChain.tokens.map((t) => ({
+    symbol: t.asset.symbol,
+    chainAddress: t.address,
+    zrcAddress: t.zrcTokenAddress,
+    logo: (t.asset as any)?.logo ?? '',
+  }))
+
+  const [inputTokenSymbol, setInputTokenSymbol] = useState<string>(
+    allowedTokens[0]?.symbol ?? ''
+  )
+
+  useEffect(() => {
+    if (!allowedTokens.find((t) => t.symbol === inputTokenSymbol)) {
+      setInputTokenSymbol(allowedTokens[0]?.symbol ?? '')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentChainKey])
+
+  // On-behalf-of (advanced)
+  const [onBehalfAdvanced, setOnBehalfAdvanced] = useState(false)
+  const [onBehalfChainKey, setOnBehalfChainKey] =
+    useState<ChainKey>(currentChainKey)
+  const [onBehalfAddress, setOnBehalfAddress] = useState('')
 
   const disableSubmit =
     !supplyAmount ||
     Number.isNaN(Number.parseFloat(supplyAmount)) ||
     Number.parseFloat(supplyAmount) <= 0 ||
+    !selected ||
+    !inputTokenSymbol ||
+    (onBehalfAdvanced &&
+      (onBehalfChainKey == null || onBehalfAddress.trim() === '')) ||
     isSupplying
 
-  const calculateEarnings = () => {
-    if (!selected || !selected.apyPct) return '0.00'
-    const amt = Number.parseFloat(supplyAmount || '0')
-    if (!Number.isFinite(amt) || amt <= 0) return '0.00'
-    const apr = selected.apyPct / 100
-    const daily = (amt * apr) / 365
-    return daily.toLocaleString(undefined, { maximumFractionDigits: 6 })
-  }
-
   const handleSupply = async () => {
-    if (!selected || !supplyAmount) return
+    if (!selected || !supplyAmount || !inputTokenSymbol) return
     setIsSupplying(true)
     await new Promise((r) => setTimeout(r, 1500))
     setIsSupplying(false)
     setSupplyAmount('')
     setSelectedSymbol(null)
+    setOnBehalfAdvanced(false)
+    setOnBehalfChainKey(currentChainKey)
+    setOnBehalfAddress('')
   }
 
   const DotSpin = () => (
     <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white align-middle" />
   )
 
+  const onBehalfVM = CHAINS[onBehalfChainKey].vm
+  const addressHint =
+    onBehalfVM === VM.EVM ? '0x… (EVM address)' : 'Base58… (Solana address)'
+
   return (
     <main className="container mx-auto px-6 py-8">
-      <div className="max-w-6xl mx-auto">
+      {/* widened container for large screens */}
+      <div className="mx-auto max-w-7xl 2xl:max-w-[90rem]">
         <div className="text-center mb-8">
           <h2 className="font-heading text-4xl text-white mb-4">
             Supply & Earn Across Chains
@@ -312,47 +350,125 @@ export default function SupplyPage() {
                   <CardContent>
                     {selected ? (
                       <div className="space-y-6">
+                        {/* Amount + Pay With */}
+                        {/* Amount + Pay With (60/40 on lg+) */}
                         <div>
-                          <label className="text-gray-300 text-sm font-medium mb-2 block">
-                            Amount to Supply
-                          </label>
-                          <div className="relative">
-                            <Input
-                              type="number"
-                              placeholder="0.00"
-                              value={supplyAmount}
-                              onChange={(e) => setSupplyAmount(e.target.value)}
-                              className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 pr-20"
-                            />
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                              {selected.symbol}
+                          <div className="flex items-center gap-2">
+                            <label className="text-gray-300 text-sm font-medium">
+                              Amount to Supply
+                            </label>
+                            <Tooltip content="Smart Lend: provide any supported token on this chain; we swap to the vault asset, then supply.">
+                              <InfoIcon className="h-3.5 w-3.5 text-gray-400" />
+                            </Tooltip>
+                          </div>
+
+                          {/* 1 col on mobile; 5 cols on lg (3/5 + 2/5 = 60/40) */}
+                          <div className="mt-2 grid grid-cols-1 lg:grid-cols-5 lg:items-center gap-3">
+                            {/* 60%: amount input */}
+                            <div className="relative lg:col-span-3">
+                              <Input
+                                type="number"
+                                placeholder="0.00"
+                                value={supplyAmount}
+                                onChange={(e) =>
+                                  setSupplyAmount(e.target.value)
+                                }
+                                className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 pr-24 h-12"
+                              />
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                {inputTokenSymbol || selected.symbol}
+                              </div>
+                            </div>
+
+                            {/* 40%: token selector */}
+                            <div className="lg:col-span-2">
+                              {/* keep a11y via aria-label instead of visible label */}
+                              <select
+                                aria-label="Pay with"
+                                value={inputTokenSymbol}
+                                onChange={(e) =>
+                                  setInputTokenSymbol(e.target.value)
+                                }
+                                className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 h-12 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                {allowedTokens.map((t) => (
+                                  <option key={t.symbol} value={t.symbol}>
+                                    {t.symbol}
+                                  </option>
+                                ))}
+                              </select>
                             </div>
                           </div>
                         </div>
 
-                        <div className="space-y-3 p-4 rounded-lg bg-gray-800">
-                          <div className="flex justify-between">
-                            <span className="text-gray-300">Supply APY</span>
-                            <span className="text-green-400 font-bold">
-                              {selected.apy}
-                            </span>
+                        {/* On behalf of (advanced) */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-300 text-sm font-medium">
+                                On behalf of
+                              </span>
+                              <Tooltip content="Advanced: supply for a different address on a specific chain">
+                                <InfoIcon className="h-3.5 w-3.5 text-gray-400" />
+                              </Tooltip>
+                            </div>
+
+                            <label className="flex items-center gap-2 text-sm text-gray-300">
+                              <input
+                                type="checkbox"
+                                checked={onBehalfAdvanced}
+                                onChange={(e) =>
+                                  setOnBehalfAdvanced(e.target.checked)
+                                }
+                                className="h-4 w-4 accent-blue-600"
+                              />
+                              Supply for another user
+                            </label>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-300">
-                              Estimated Daily Earnings
-                            </span>
-                            <span className="text-white">
-                              ~{calculateEarnings()} {selected.symbol}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-300">Utilization</span>
-                            <span className="text-white">
-                              {selected.utilizationPct === null
-                                ? '—'
-                                : `${selected.utilizationPct.toFixed(1)}%`}
-                            </span>
-                          </div>
+
+                          {!onBehalfAdvanced ? (
+                            <div className="text-gray-400 text-sm">
+                              Default: Self (current chain & connected wallet)
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <div>
+                                <label className="text-gray-400 text-xs mb-1 block">
+                                  Chain
+                                </label>
+                                <select
+                                  value={onBehalfChainKey}
+                                  onChange={(e) =>
+                                    setOnBehalfChainKey(
+                                      e.target.value as ChainKey
+                                    )
+                                  }
+                                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 h-11 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                >
+                                  {(Object.keys(CHAINS) as ChainKey[]).map(
+                                    (k) => (
+                                      <option key={k} value={k}>
+                                        {CHAINS[k].label}
+                                      </option>
+                                    )
+                                  )}
+                                </select>
+                              </div>
+                              <div className="sm:col-span-2">
+                                <label className="text-gray-400 text-xs mb-1 block">
+                                  Address on selected chain
+                                </label>
+                                <Input
+                                  placeholder={addressHint}
+                                  value={onBehalfAddress}
+                                  onChange={(e) =>
+                                    setOnBehalfAddress(e.target.value)
+                                  }
+                                  className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 h-11"
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         <Button
