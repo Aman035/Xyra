@@ -1,109 +1,171 @@
 'use client'
 
-import { useState } from 'react'
+import Image from 'next/image'
+import { useEffect, useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
-import { InfoIcon, TrendingUpIcon, GlobeIcon } from 'lucide-react'
+import { InfoIcon, TrendingUpIcon } from 'lucide-react'
+import { Tooltip } from '@/components/ui/tooltip'
+import { Progress } from '@/components/ui/progress'
 
-type Asset = {
+import { VAULTS } from '@/lib/vaults'
+import { ERC20_ABI } from '@/lib/abis'
+import { readZetaContract } from '@/lib/zeta'
+import { formatUnits } from 'viem'
+
+const RAY_DECIMALS = 27 // contract uses 1e27 scale
+
+type UiRow = {
   symbol: string
   name: string
-  icon: string
-  balance: string // may include commas
-  apy: string // e.g. "4.25%"
-  supplied: string
-  price: string
-  totalSupplied: string
-  chains: string[]
+  logo: string
+  tvl: string
+  utilizationPct: number | null
+  apy: string
+  apyPct?: number | null
+  zrc20: `0x${string}`
+  metadata?: string
+  loadingVault: boolean
 }
 
-const SUPPLY_ASSETS: Asset[] = [
-  {
-    symbol: 'USDC',
-    name: 'USD Coin',
-    icon: '💰',
-    balance: '1,250.00',
-    apy: '4.25%',
-    supplied: '0.00',
-    price: '$1.00',
-    totalSupplied: '$1.2B',
-    chains: ['Ethereum', 'Polygon', 'Arbitrum'],
-  },
-  {
-    symbol: 'ETH',
-    name: 'Ethereum',
-    icon: '⟠',
-    balance: '2.45',
-    apy: '3.85%',
-    supplied: '0.00',
-    price: '$2,340.50',
-    totalSupplied: '$890M',
-    chains: ['Ethereum', 'Arbitrum', 'Optimism'],
-  },
-  {
-    symbol: 'WBTC',
-    name: 'Wrapped Bitcoin',
-    icon: '₿',
-    balance: '0.125',
-    apy: '2.95%',
-    supplied: '0.00',
-    price: '$43,250.00',
-    totalSupplied: '$340M',
-    chains: ['Ethereum', 'Polygon'],
-  },
-  {
-    symbol: 'DAI',
-    name: 'Dai Stablecoin',
-    icon: '◈',
-    balance: '850.00',
-    apy: '4.15%',
-    supplied: '0.00',
-    price: '$1.00',
-    totalSupplied: '$280M',
-    chains: ['Ethereum', 'Polygon', 'Arbitrum'],
-  },
-]
-
-// --- helpers (no UI changes)
-const toNumber = (v: string) => Number.parseFloat(v.replace(/,/g, ''))
-const apyToFloat = (apy: string) =>
-  Number.parseFloat(apy.replace('%', '')) / 100
+function pctLabel(n?: number | null, min = 2, max = 2) {
+  if (n == null || !Number.isFinite(n)) return '—'
+  if (n > 0 && n < 0.01) return '<0.01%'
+  return `${n.toFixed(Math.min(Math.max(min, 0), Math.max(max, min)))}%`
+}
 
 export default function SupplyPage() {
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null)
-  const [supplyAmount, setSupplyAmount] = useState<string>('') // keep as string for the input
-  const [isSupplying, setIsSupplying] = useState<boolean>(false)
+  const rowsBase: UiRow[] = useMemo(() => {
+    return Object.values(VAULTS).map((v) => ({
+      symbol: v.asset.symbol,
+      name: v.asset.name,
+      logo: v.asset.logo,
+      tvl: '—',
+      utilizationPct: null,
+      apy: '—',
+      apyPct: null,
+      zrc20: v.zrc20TokenAddress as `0x${string}`,
+      metadata: v.metadata,
+      loadingVault: true,
+    }))
+  }, [])
 
-  const handleSupply = async () => {
-    if (!selectedAsset || !supplyAmount) return
-    setIsSupplying(true)
-    await new Promise((r) => setTimeout(r, 2000)) // simulate tx
-    setIsSupplying(false)
-    setSupplyAmount('')
-    setSelectedAsset(null)
-  }
+  const [rows, setRows] = useState<UiRow[]>(rowsBase)
 
-  const calculateEarnings = () => {
-    if (!selectedAsset || !supplyAmount) return '0.00'
-    const amount = toNumber(supplyAmount)
-    if (Number.isNaN(amount) || amount <= 0) return '0.00'
-    const apy = apyToFloat(selectedAsset.apy)
-    return ((amount * apy) / 365).toFixed(6)
-  }
+  useEffect(() => {
+    let cancelled = false
 
-  const setMax = () => {
-    if (!selectedAsset) return
-    // ensure numeric format without commas for <input type="number" />
-    setSupplyAmount(String(toNumber(selectedAsset.balance)))
-  }
+    async function loadVaultData() {
+      setRows((prev) => prev.map((r) => ({ ...r, loadingVault: true })))
+
+      const next = await Promise.all(
+        rowsBase.map(async (r) => {
+          try {
+            // 1) token decimals
+            // const decimals = await readZetaContract<number>({
+            //   address: r.zrc20,
+            //   functionName: 'decimals',
+            //   abi: ERC20_ABI,
+            // })
+            const decimals = 18
+
+            // 2) TVL (underlying)
+            const totalAssets = await readZetaContract<bigint>({
+              functionName: 'getTotalSupplied',
+              args: [r.zrc20],
+            })
+            const tvlNum = Number.parseFloat(formatUnits(totalAssets, decimals))
+            const tvlStr = tvlNum.toLocaleString(undefined, {
+              maximumFractionDigits: 6,
+            })
+
+            // 3) Utilization in RAY → %
+            const utilRay = await readZetaContract<bigint>({
+              functionName: '_calculateUtilization',
+              args: [r.zrc20],
+            })
+            const utilPct =
+              Number.parseFloat(formatUnits(utilRay, RAY_DECIMALS)) * 100
+
+            // 4) Supply rate in RAY/year → APY %
+            const supplyRateRay = await readZetaContract<bigint>({
+              functionName: 'getCurrentSupplyRate',
+              args: [r.zrc20],
+            })
+            const apyPct =
+              Number.parseFloat(formatUnits(supplyRateRay, RAY_DECIMALS)) * 100
+            const apyStr = pctLabel(apyPct)
+
+            // // Debug (optional)
+            // console.log({
+            //   symbol: r.symbol,
+            //   tvlNum,
+            //   utilRay: utilRay.toString(),
+            //   supplyRateRay: supplyRateRay.toString(),
+            //   utilPct,
+            //   apyPct,
+            // })
+
+            return {
+              ...r,
+              tvl: tvlStr,
+              utilizationPct: Number.isFinite(utilPct) ? utilPct : 0,
+              apy: apyStr,
+              apyPct: Number.isFinite(apyPct) ? apyPct : 0,
+              loadingVault: false,
+            }
+          } catch (err) {
+            console.log(err)
+            return { ...r, loadingVault: false }
+          }
+        })
+      )
+
+      if (!cancelled) setRows(next)
+    }
+
+    loadVaultData()
+    return () => {
+      cancelled = true
+    }
+  }, [rowsBase])
+
+  /** Form state */
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null)
+  const selected = rows.find((r) => r.symbol === selectedSymbol) || null
+  const [supplyAmount, setSupplyAmount] = useState('')
+  const [isSupplying, setIsSupplying] = useState(false)
 
   const disableSubmit =
     !supplyAmount ||
-    Number.isNaN(toNumber(supplyAmount)) ||
-    toNumber(supplyAmount) <= 0 ||
+    Number.isNaN(Number.parseFloat(supplyAmount)) ||
+    Number.parseFloat(supplyAmount) <= 0 ||
     isSupplying
+
+  // simple daily earnings estimate from APR (APY) for UX
+  const calculateEarnings = () => {
+    if (!selected || !selected.apyPct) return '0.00'
+    const amt = Number.parseFloat(supplyAmount || '0')
+    if (!Number.isFinite(amt) || amt <= 0) return '0.00'
+    const apr = selected.apyPct / 100
+    const daily = (amt * apr) / 365
+    return daily.toLocaleString(undefined, { maximumFractionDigits: 6 })
+  }
+
+  const handleSupply = async () => {
+    if (!selected || !supplyAmount) return
+    setIsSupplying(true)
+    await new Promise((r) => setTimeout(r, 1500))
+    setIsSupplying(false)
+    setSupplyAmount('')
+    setSelectedSymbol(null)
+  }
+
+  const DotSpin = () => (
+    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white align-middle" />
+  )
 
   return (
     <main className="container mx-auto px-6 py-8">
@@ -121,67 +183,112 @@ export default function SupplyPage() {
         <Tabs defaultValue="supply" className="w-full">
           <TabsContent value="supply" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Asset Selection */}
+              {/* Vault list */}
               <div className="lg:col-span-2">
                 <Card className="bg-gray-900 border-gray-800">
                   <CardHeader>
                     <CardTitle className="text-white font-heading">
-                      Select Asset to Supply
+                      Select Vault to Supply
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      {SUPPLY_ASSETS.map((asset) => {
-                        const isSelected =
-                          selectedAsset?.symbol === asset.symbol
+                      {rows.map((v) => {
+                        const isSelected = selectedSymbol === v.symbol
                         return (
                           <div
-                            key={asset.symbol}
+                            key={v.symbol}
                             className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
                               isSelected
                                 ? 'border-blue-500 bg-blue-500/10'
                                 : 'border-gray-700 bg-gray-800/50 hover:bg-gray-800'
                             }`}
-                            onClick={() => setSelectedAsset(asset)}
+                            onClick={() => setSelectedSymbol(v.symbol)}
                           >
+                            {/* Row 1: Logo + name + APY + TVL */}
                             <div className="flex items-center justify-between">
                               <div className="flex items-center space-x-4">
-                                <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center text-white text-lg">
-                                  {asset.icon}
+                                <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden">
+                                  {v.logo ? (
+                                    <Image
+                                      src={v.logo}
+                                      alt={v.name}
+                                      width={32}
+                                      height={32}
+                                    />
+                                  ) : (
+                                    <span className="text-white text-lg">
+                                      {v.symbol}
+                                    </span>
+                                  )}
                                 </div>
                                 <div>
-                                  <div className="text-white font-bold text-lg">
-                                    {asset.symbol}
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-white font-bold text-lg">
+                                      {v.symbol}
+                                    </div>
+                                    <Tooltip content={v.metadata}>
+                                      <InfoIcon
+                                        className="h-3.5 w-3.5 text-gray-400"
+                                        tabIndex={0}
+                                      />
+                                    </Tooltip>
                                   </div>
-                                  <div className="text-gray-400">
-                                    {asset.name}
-                                  </div>
-                                  <div className="flex items-center space-x-1 mt-1">
-                                    <GlobeIcon className="h-3 w-3 text-cyan-400" />
-                                    <span className="text-xs text-cyan-400">
-                                      {asset.chains.length} chains
-                                    </span>
-                                  </div>
+                                  <div className="text-gray-400">{v.name}</div>
                                 </div>
                               </div>
 
+                              {/* APY */}
                               <div className="text-right">
                                 <div className="text-green-400 font-bold text-lg">
-                                  {asset.apy}
+                                  {v.apy}
                                 </div>
                                 <div className="text-gray-400 text-sm">
                                   Supply APY
                                 </div>
                               </div>
 
+                              {/* TVL */}
                               <div className="text-right">
                                 <div className="text-white font-medium">
-                                  {asset.balance} {asset.symbol}
+                                  {v.loadingVault ? (
+                                    <span className="inline-flex items-center gap-2">
+                                      <DotSpin />{' '}
+                                      <span className="align-middle">—</span>
+                                    </span>
+                                  ) : (
+                                    v.tvl
+                                  )}
                                 </div>
                                 <div className="text-gray-400 text-sm">
-                                  Available
+                                  Vault TVL
                                 </div>
                               </div>
+                            </div>
+
+                            {/* Row 2: Utilization bar */}
+                            <div className="mt-3">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-gray-400">
+                                  Utilization
+                                </span>
+                                <span className="text-white">
+                                  {v.loadingVault || v.utilizationPct === null
+                                    ? '—'
+                                    : `${v.utilizationPct.toFixed(1)}%`}
+                                </span>
+                              </div>
+                              <Progress
+                                className="mt-1 h-2"
+                                value={
+                                  v.utilizationPct === null
+                                    ? 0
+                                    : Math.max(
+                                        0,
+                                        Math.min(100, v.utilizationPct)
+                                      )
+                                }
+                              />
                             </div>
                           </div>
                         )
@@ -200,7 +307,7 @@ export default function SupplyPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {selectedAsset ? (
+                    {selected ? (
                       <div className="space-y-6">
                         <div>
                           <label className="text-gray-300 text-sm font-medium mb-2 block">
@@ -215,22 +322,8 @@ export default function SupplyPage() {
                               className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 pr-20"
                             />
                             <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                              {selectedAsset.symbol}
+                              {selected.symbol}
                             </div>
-                          </div>
-                          <div className="flex justify-between mt-2">
-                            <span className="text-gray-400 text-sm">
-                              Balance: {selectedAsset.balance}{' '}
-                              {selectedAsset.symbol}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-blue-400 hover:text-blue-300 p-0 h-auto"
-                              onClick={setMax}
-                            >
-                              MAX
-                            </Button>
                           </div>
                         </div>
 
@@ -238,39 +331,24 @@ export default function SupplyPage() {
                           <div className="flex justify-between">
                             <span className="text-gray-300">Supply APY</span>
                             <span className="text-green-400 font-bold">
-                              {selectedAsset.apy}
+                              {selected.apy}
                             </span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-gray-300">
-                              Daily Earnings
+                              Estimated Daily Earnings
                             </span>
                             <span className="text-white">
-                              ~{calculateEarnings()} {selectedAsset.symbol}
+                              ~{calculateEarnings()} {selected.symbol}
                             </span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-gray-300">
-                              Available Chains
+                            <span className="text-gray-300">Utilization</span>
+                            <span className="text-white">
+                              {selected.utilizationPct === null
+                                ? '—'
+                                : `${selected.utilizationPct.toFixed(1)}%`}
                             </span>
-                            <span className="text-cyan-400">
-                              {selectedAsset.chains.length}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-300">
-                              Collateral Factor
-                            </span>
-                            <span className="text-white">85%</span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-start space-x-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                          <InfoIcon className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
-                          <div className="text-blue-200 text-sm">
-                            Assets are automatically deployed across multiple
-                            chains for optimal yield. Supplied assets can be
-                            used as collateral to borrow other assets.
                           </div>
                         </div>
 
@@ -281,11 +359,11 @@ export default function SupplyPage() {
                         >
                           {isSupplying ? (
                             <div className="flex items-center space-x-2">
-                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                               <span>Supplying...</span>
                             </div>
                           ) : (
-                            `Supply ${selectedAsset.symbol}`
+                            `Supply ${selected.symbol}`
                           )}
                         </Button>
                       </div>
@@ -295,7 +373,7 @@ export default function SupplyPage() {
                           <TrendingUpIcon className="h-8 w-8 text-blue-400" />
                         </div>
                         <p className="text-gray-400">
-                          Select an asset to start supplying
+                          Select a vault to start supplying
                         </p>
                       </div>
                     )}
