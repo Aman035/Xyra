@@ -6,4 +6,12 @@ pragma solidity ^0.8.20;
 interface ICollateralManager {
 
     function getLiquidationThreshold(address asset) external view returns (uint256);
+    function getLTV(address asset) external view returns (uint256);
+    function setCollateralConfig(
+        address asset,
+        uint256 ltv,
+        uint256 liquidationThreshold,
+        uint256 liquidationBonus,
+        bool enabled
+    ) external;
 }

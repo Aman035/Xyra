@@ -42,7 +42,7 @@ struct CollateralConfig {
         bool enabled
     ) external onlyPoolManager() {
         require(asset != address(0), "CollateralManager: zero asset");
-        require(ltv <= 10000 && liquidationThreshold <= 10000 && liquidationBonus >= 10000, "CollateralManager: invalid ratios");
+        require(ltv <= 1e18 && liquidationThreshold <= 1e18 && liquidationBonus >= 1e18, "CollateralManager: invalid ratios");
 
         collateralConfigs[asset] = CollateralConfig({
             ltv: ltv,

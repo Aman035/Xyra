@@ -7,8 +7,7 @@ pragma solidity ^0.8.20;
 interface IPoolManager {
     /// @notice Creates a new lending pool for a given asset
     /// @param asset The ERC20 token address to create a pool for
-    /// @return poolAddress The address of the newly deployed pool
-    function createVault(address asset) external returns (address poolAddress);
+    function createVault(address asset) external returns (address vaultAddr, address xTokenAddr);
 
     /// @notice Enables or disables the use of an asset as collateral
     /// @param asset The token to configure
@@ -22,6 +21,9 @@ interface IPoolManager {
 
     /// @notice Returns the vault address for a registered asset, or address(0) if none
     function getVault(address asset) external view returns (address);
+
+     /// @notice Returns the xToken address for a registered asset, or address(0) if none
+    function getAssetToXToken(address asset) external view returns (address);
 
     /// @notice Returns list of all registered asset addresses
     function getAllAssets() external view returns (address[] memory);

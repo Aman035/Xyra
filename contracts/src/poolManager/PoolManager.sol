@@ -4,42 +4,62 @@ pragma solidity ^0.8.20;
 import "../protocol/BaseContract.sol";
 import "../interfaces/IPoolManager.sol";
 import "../vaults/ERC4626Reserve.sol"; // Your ERC4626 vault wrapper
+import "../interestBearingToken/xERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @title Pool Manager Contract
 /// @notice Manages the creation and configuration of ERC4626 vaults (reserves) per supported asset
 contract PoolManager is IPoolManager, BaseContract {
+    address public lendingPool;
+
     /// @dev Mapping of asset address to whether it can be used as collateral
     mapping(address => bool) public assetCollateralStatus;
 
     /// @dev Mapping of asset address to its deployed ERC4626 reserve vault
     mapping(address => address) public assetToVault;
 
+    /// @dev Mapping of asset to corresponding xERC20 token
+    mapping(address => address) public assetToXToken;
+
     /// @dev List of all registered assets
     address[] public allAssets;
 
-    event PoolCreated(address indexed asset, address indexed vault);
+    event PoolCreated(address indexed asset, address indexed vault, address indexed xERC20);
     event CollateralStatusUpdated(address indexed asset, bool isEnabled);
 
     constructor(address _acm) BaseContract(_acm) {}
 
-    /// @notice Deploys a new ERC4626 vault for an asset and registers it
+    /// @notice Deploys a new ERC4626 vault and xERC20 token for an asset and registers them
     function createVault(address asset)
         external
         onlyPoolManager
-        returns (address)
+        returns (address vaultAddr, address xTokenAddr)
     {
         require(asset != address(0), "Invalid asset address");
         require(assetToVault[asset] == address(0), "Pool already exists");
+        require(lendingPool != address(0), "Pool is not set in the manager");
 
-        ERC4626Reserve vault = new ERC4626Reserve(IERC20(asset));
-        address vaultAddr = address(vault);
+        // Deploy the xERC20 token with a custom name and symbol
+        string memory name = string(abi.encodePacked("x", ERC20(asset).name()));
+        string memory symbol = string(abi.encodePacked("x", ERC20(asset).symbol()));
+        xERC20 xToken = new xERC20(name, symbol, lendingPool);
+        xTokenAddr = address(xToken);
 
+        // Deploy the vault (ERC4626)
+        ERC4626Reserve vault = new ERC4626Reserve(IERC20(xToken));
+        vaultAddr = address(vault);
+
+        // Register vault and xERC20 token
         assetToVault[asset] = vaultAddr;
+        assetToXToken[asset] = xTokenAddr;
         allAssets.push(asset);
 
-        emit PoolCreated(asset, vaultAddr);
-        return vaultAddr;
+        emit PoolCreated(asset, vaultAddr, xTokenAddr);
+    }
+
+    function setLendingPool(address _lendingPool) external onlyPoolManager {
+        require(_lendingPool != address(0), "Invalid lendingPool");
+        lendingPool = _lendingPool;
     }
 
     /// @notice Enables or disables collateral status for a registered asset
@@ -76,5 +96,10 @@ contract PoolManager is IPoolManager, BaseContract {
     /// @notice Returns the vault address for a registered asset, or address(0) if none
     function getVault(address asset) external view returns (address) {
         return assetToVault[asset];
+    }
+
+    /// @notice Returns the xToken address for a registered asset, or address(0) if none
+    function getAssetToXToken(address asset) external view returns (address) {
+        return assetToXToken[asset];
     }
 }

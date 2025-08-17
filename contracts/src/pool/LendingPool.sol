@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "../protocol/PoolConfigurationProvider.sol";
 import "../interfaces/ILendingPool.sol";
 import "../vaults/ERC4626Reserve.sol";
+import "../interestBearingToken/xERC20.sol";
 
 contract LendingPool is
     ILendingPool,
@@ -77,19 +78,32 @@ contract LendingPool is
         uint256 amount,
         address onBehalfOf
     ) external override nonReentrant {
-        require(amount > 0, "LendingPool: amount 0");
-        address vaultAddr = poolManager.getVault(asset);
-        require(vaultAddr != address(0), "LendingPool: unsupported asset");
+        uint8 assetDecimals = ERC20(asset).decimals();
+        uint256 scaledAmount = (amount * 1e18) / (10 ** assetDecimals);
 
+        require(scaledAmount > 0, "LendingPool: amount 0");
+
+        address vaultAddr = poolManager.getVault(asset);
+        address xTokenAddr = poolManager.getAssetToXToken(asset);
+        require(vaultAddr != address(0), "LendingPool: unsupported asset");
+        require(xTokenAddr != address(0), "LendingPool: xToken not deployed");
+
+        // Transfer the underlying asset from sender to pool
         IERC20(asset).safeTransferFrom(msg.sender, address(this), amount);
 
-        IERC20(asset).approve(vaultAddr, amount);
+        // Mint equivalent xERC20 tokens to this lending pool contract
+        xERC20(xTokenAddr).mint(address(this), scaledAmount);
 
+        // Approve vault to spend xERC20 tokens
+        IERC20(xTokenAddr).approve(vaultAddr, scaledAmount);
+
+        // Deposit xERC20 tokens into the vault, receive shares
         uint256 shares = ERC4626Reserve(vaultAddr).deposit(
-            amount,
+            scaledAmount,
             address(this)
         );
 
+        // Update user shares mapping
         userShares[onBehalfOf][asset] += shares;
 
         emit Supplied(asset, msg.sender, onBehalfOf, amount);
@@ -100,29 +114,64 @@ contract LendingPool is
         uint256 amount,
         address to
     ) external override nonReentrant returns (uint256) {
+        uint256 scaledAmount = (amount * 1e18) /
+            (10 ** ERC20(asset).decimals());
         require(amount > 0, "LendingPool: amount 0");
+
         address vaultAddr = poolManager.getVault(asset);
+        address xTokenAddr = poolManager.getAssetToXToken(asset);
         require(vaultAddr != address(0), "LendingPool: unsupported asset");
+        require(xTokenAddr != address(0), "LendingPool: xToken not deployed");
 
         uint256 sharesToBurn = ERC4626Reserve(vaultAddr).previewWithdraw(
-            amount
+            scaledAmount
         );
         require(
             userShares[msg.sender][asset] >= sharesToBurn,
             "LendingPool: insufficient balance"
         );
 
+        // Check health factor if user has any debt
+        uint256 totalDebt = getUserTotalDebt(msg.sender);
+        if (totalDebt > 0) {
+            uint256 oldCollateral = getUserTotalCollateral(msg.sender);
+            uint256 assetPrice = priceOracle.getAssetPrice(asset);
+            uint256 withdrawnValueUsd = (scaledAmount * assetPrice) /
+                (10 ** ERC4626Reserve(vaultAddr).decimals());
+
+            uint256 newCollateral = oldCollateral > withdrawnValueUsd
+                ? oldCollateral - withdrawnValueUsd
+                : 0;
+            uint256 liquidationThreshold = collateralManager
+                .getLiquidationThreshold(asset);
+            uint256 newHealthFactor = (newCollateral * liquidationThreshold) /
+                totalDebt;
+
+            require(
+                newHealthFactor >= 1e18,
+                "LendingPool: withdraw would lower health factor"
+            );
+        }
+
+        // Update user shares before redeeming
         userShares[msg.sender][asset] -= sharesToBurn;
 
-        uint256 withdrawnAmount = ERC4626Reserve(vaultAddr).withdraw(
-            amount,
-            to,
+        // Redeem vault shares, pool receives xTokens back
+        ERC4626Reserve(vaultAddr).redeem(
+            sharesToBurn,
+            address(this),
             address(this)
         );
 
-        emit Withdrawn(asset, msg.sender, to, withdrawnAmount);
+        // Burn xTokens from pool's balance
+        xERC20(xTokenAddr).burn(address(this), scaledAmount);
 
-        return withdrawnAmount;
+        // Transfer underlying asset back to user
+        IERC20(asset).safeTransfer(to, amount);
+
+        emit Withdrawn(asset, msg.sender, to, amount);
+
+        return amount;
     }
 
     function borrow(
@@ -130,16 +179,34 @@ contract LendingPool is
         uint256 amount,
         address onBehalfOf
     ) external override nonReentrant {
+        uint8 assetTokenDecimals = ERC20(asset).decimals();
+        uint256 scaledAmount = (amount * 1e18) / (10 ** assetTokenDecimals);
         require(amount > 0, "Amount 0");
+
         address vaultAddr = poolManager.getVault(asset);
         require(vaultAddr != address(0), "Unsupported asset");
 
-        // 1. Validate user collateral & health factor (not shown here, add your own checks)
+        // Calculate current debt and collateral in USD or scaled decimals
+        uint256 currentDebt = getUserTotalDebt(msg.sender);
+        uint256 currentCollateral = getUserTotalCollateral(msg.sender);
 
-        // 2. Increase user debt
-        userDebt[onBehalfOf][asset] += amount;
+        uint256 assetPrice = priceOracle.getAssetPrice(asset);
+        uint256 assetDecimals = ERC4626Reserve(vaultAddr).decimals();
 
-        // 3. Transfer tokens from vault or pool to user (simplified)
+        uint256 addedDebtUsd = (scaledAmount * assetPrice) /
+            (10 ** assetDecimals);
+        uint256 newTotalDebt = currentDebt + addedDebtUsd;
+
+        uint256 ltv = collateralManager.getLTV(asset);
+        require(
+            newTotalDebt <= (currentCollateral * ltv) / 1e18,
+            "LendingPool: borrow exceeds LTV"
+        );
+
+        // Update user debt
+        userDebt[msg.sender][asset] += scaledAmount;
+
+        // Transfer underlying tokens directly from pool to borrower
         IERC20(asset).safeTransfer(onBehalfOf, amount);
 
         emit Borrowed(asset, onBehalfOf, onBehalfOf, amount);
@@ -150,21 +217,27 @@ contract LendingPool is
         uint256 amount,
         address onBehalfOf
     ) external override nonReentrant returns (uint256) {
-        require(amount > 0, "Amount 0");
+        uint8 assetTokenDecimals = ERC20(asset).decimals();
+        uint256 scaledAmount = (amount * 1e18) / (10 ** assetTokenDecimals);
+        require(amount > 0, "LendingPool: amount is zero");
+
         address vaultAddr = poolManager.getVault(asset);
-        require(vaultAddr != address(0), "Unsupported asset");
+        require(vaultAddr != address(0), "LendingPool: unsupported asset");
 
-        uint256 debt = userDebt[onBehalfOf][asset];
-        require(debt > 0, "No debt");
+        uint256 currentDebt = userDebt[onBehalfOf][asset];
+        require(currentDebt > 0, "LendingPool: no debt");
 
-        // Calculate actual amount to repay (can't repay more than debt)
-        uint256 repayAmount = amount > debt ? debt : amount;
+        // Cap the repayment to the actual debt
+        uint256 repayScaled = scaledAmount > currentDebt
+            ? currentDebt
+            : scaledAmount;
 
-        // Transfer tokens from user to pool/vault
+        // Convert scaled amount back to token decimals for actual transfer
+        uint256 repayAmount = (repayScaled * (10 ** assetTokenDecimals)) / 1e18;
+
         IERC20(asset).safeTransferFrom(msg.sender, address(this), repayAmount);
 
-        // Decrease debt
-        userDebt[onBehalfOf][asset] -= repayAmount;
+        userDebt[onBehalfOf][asset] = currentDebt - repayScaled;
 
         emit Repaid(asset, onBehalfOf, msg.sender, repayAmount);
         return repayAmount;
@@ -238,16 +311,42 @@ contract LendingPool is
     }
 
     function getHealthFactor(address user) public view returns (uint256) {
-        uint256 totalCollateralUsd = getUserTotalCollateral(user);
         uint256 totalDebtUsd = getUserTotalDebt(user);
 
-        if (totalDebtUsd == 0) return type(uint256).max; // no debt → max health
+        if (totalDebtUsd == 0) {
+            return type(uint256).max;
+        }
 
-        // Liquidation threshold could be a protocol parameter, e.g., 0.85 (85%)
-        uint256 liquidationThreshold = collateralManager
-            .getLiquidationThreshold(user);
+        address[] memory assets = poolManager.getAllAssets();
+        uint256 adjustedCollateralUsd = 0;
 
-        return
-            (totalCollateralUsd * liquidationThreshold * 1e18) / totalDebtUsd; // scaled by 1e18
+        for (uint256 i = 0; i < assets.length; i++) {
+            address asset = assets[i];
+            if (!poolManager.isCollateralEnabled(asset)) {
+                continue;
+            }
+
+            uint256 shares = userShares[user][asset];
+            if (shares == 0) {
+                continue;
+            }
+
+            address vault = poolManager.getVault(asset);
+            uint256 underlyingAmount = ERC4626Reserve(vault).previewRedeem(
+                shares
+            );
+            uint256 price = priceOracle.getAssetPrice(asset);
+            uint256 decimals = ERC4626Reserve(vault).decimals();
+            uint256 valueUsd = (underlyingAmount * price) / (10 ** decimals);
+            uint256 liqThreshold = collateralManager.getLiquidationThreshold(
+                asset
+            );
+            uint256 adjusted = (valueUsd * liqThreshold) / 1e18;
+            adjustedCollateralUsd += adjusted;
+        }
+
+        uint256 healthFactor = (adjustedCollateralUsd * 1e18) / totalDebtUsd;
+
+        return healthFactor;
     }
 }
