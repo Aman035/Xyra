@@ -24,17 +24,21 @@ contract PoolManager is IPoolManager, BaseContract {
     /// @dev List of all registered assets
     address[] public allAssets;
 
+    mapping(address => uint256) private _liquidityIndex;
+    mapping(address => uint40) private _lastUpdateTimestamp;
+
     event PoolCreated(address indexed asset, address indexed vault, address indexed xERC20);
     event CollateralStatusUpdated(address indexed asset, bool isEnabled);
 
     constructor(address _acm) BaseContract(_acm) {}
 
+    modifier onlyLendingPool() {
+        require(msg.sender == lendingPool, "Only lending pool");
+        _;
+    }
+
     /// @notice Deploys a new ERC4626 vault and xERC20 token for an asset and registers them
-    function createVault(address asset)
-        external
-        onlyPoolManager
-        returns (address vaultAddr, address xTokenAddr)
-    {
+    function createVault(address asset) external onlyPoolManager returns (address vaultAddr, address xTokenAddr) {
         require(asset != address(0), "Invalid asset address");
         require(assetToVault[asset] == address(0), "Pool already exists");
         require(lendingPool != address(0), "Pool is not set in the manager");
@@ -63,10 +67,7 @@ contract PoolManager is IPoolManager, BaseContract {
     }
 
     /// @notice Enables or disables collateral status for a registered asset
-    function setCollateralStatus(address asset, bool isEnabled)
-        external
-        onlyPoolManager
-    {
+    function setCollateralStatus(address asset, bool isEnabled) external onlyPoolManager {
         require(asset != address(0), "Invalid asset address");
         require(assetToVault[asset] != address(0), "Pool does not exist");
 
@@ -75,11 +76,7 @@ contract PoolManager is IPoolManager, BaseContract {
     }
 
     /// @notice Returns whether the given asset is enabled as collateral
-    function isCollateralEnabled(address asset)
-        external
-        view
-        returns (bool)
-    {
+    function isCollateralEnabled(address asset) external view returns (bool) {
         return assetCollateralStatus[asset];
     }
 
@@ -88,7 +85,7 @@ contract PoolManager is IPoolManager, BaseContract {
         return allAssets;
     }
 
-        /// @notice Returns true if the asset is registered and supported
+    /// @notice Returns true if the asset is registered and supported
     function isAssetSupported(address asset) external view returns (bool) {
         return assetToVault[asset] != address(0);
     }
@@ -101,5 +98,21 @@ contract PoolManager is IPoolManager, BaseContract {
     /// @notice Returns the xToken address for a registered asset, or address(0) if none
     function getAssetToXToken(address asset) external view returns (address) {
         return assetToXToken[asset];
+    }
+
+    function getLiquidityIndex(address asset) external view returns (uint256) {
+        return _liquidityIndex[asset];
+    }
+
+    function getLastUpdateTimestamp(address asset) external view returns (uint40) {
+        return _lastUpdateTimestamp[asset];
+    }
+
+    function setLiquidityIndex(address asset, uint256 newIndex) external onlyLendingPool {
+        _liquidityIndex[asset] = newIndex;
+    }
+
+    function setLastUpdateTimestamp(address asset, uint40 timestamp) external onlyLendingPool {
+        _lastUpdateTimestamp[asset] = timestamp;
     }
 }

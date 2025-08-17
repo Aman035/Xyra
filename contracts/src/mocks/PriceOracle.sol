@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
+
 import "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
 import "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 
 import "../interfaces/IPriceOracle.sol";
-import '../protocol/BaseContract.sol';
+import "../protocol/BaseContract.sol";
 
 /// @title Price Oracle for Asset Valuation using Pyth
 /// @author
@@ -14,15 +15,15 @@ contract PriceOracle is IPriceOracle, BaseContract {
 
     /// @notice Maps ERC20 token address to Pyth price feed ID
     mapping(address => bytes32) public assetToPythId;
-    mapping (address => uint256) public assetPrice;
+    mapping(address => uint256) public assetPrice;
 
     /// @dev Normalization factor: Pyth prices use 10^exponent; we normalize to 18 decimals
     uint8 internal constant TARGET_DECIMALS = 18;
 
-    constructor(address _acm) BaseContract(_acm)  {}
+    constructor(address _acm) BaseContract(_acm) {}
 
     /// @notice Admin function to set the Pyth price feed ID for an ERC20 asset
-    function setAssetFeedId(address asset, bytes32 feedId) external onlyEmergencyAdmin(){
+    function setAssetFeedId(address asset, bytes32 feedId) external onlyEmergencyAdmin {
         assetToPythId[asset] = feedId;
     }
 
