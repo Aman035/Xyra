@@ -22,6 +22,7 @@ const ALLOWED_EVM_IDS = new Set<number>(
 const LABELS = new Map<number, string>(ALL.map((c) => [c.id, c.label] as const))
 const SEPOLIA = CHAINS.sepolia
 const BASE_SEPOLIA = CHAINS.baseSepolia
+const ZETA_ATHENS = CHAINS.zetaAthens
 const SOLANA_LABEL = CHAINS.solDevnet.label
 
 export default function Header() {
@@ -192,6 +193,14 @@ export default function Header() {
                         onClick={() => switchTo(BASE_SEPOLIA.id)}
                       >
                         Switch: {BASE_SEPOLIA.label}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="h-6 px-2"
+                        onClick={() => switchTo(ZETA_ATHENS.id)}
+                      >
+                        Switch: {ZETA_ATHENS.label}
                       </Button>
                     </div>
                   )}
