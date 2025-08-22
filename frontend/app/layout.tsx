@@ -4,6 +4,7 @@ import { Space_Grotesk, DM_Sans } from 'next/font/google'
 import './globals.css'
 import Providers from './providers'
 import Header from '@/components/header'
+import { ToastProvider } from '@/components/ui/toast'
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
@@ -33,10 +34,12 @@ export default function RootLayout({
     >
       <body className="font-sans">
         <Providers>
-          <div className="min-h-screen bg-gray-950">
-            <Header />
-            {children}
-          </div>
+          <ToastProvider>
+            <div className="min-h-screen bg-gray-950">
+              <Header />
+              {children}
+            </div>
+          </ToastProvider>
         </Providers>
       </body>
     </html>
