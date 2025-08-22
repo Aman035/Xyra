@@ -1215,3 +1215,58 @@ export const LENDING_POOL_ABI = [
     inputs: [],
   },
 ] as const
+
+export const EVM_GATEWAY_ABI = [
+  {
+    inputs: [
+      { internalType: 'address', name: 'receiver', type: 'address' },
+      { internalType: 'bytes', name: 'payload', type: 'bytes' },
+      {
+        components: [
+          { internalType: 'address', name: 'revertAddress', type: 'address' },
+          { internalType: 'bool', name: 'callOnRevert', type: 'bool' },
+          { internalType: 'address', name: 'abortAddress', type: 'address' },
+          { internalType: 'bytes', name: 'revertMessage', type: 'bytes' },
+          {
+            internalType: 'uint256',
+            name: 'onRevertGasLimit',
+            type: 'uint256',
+          },
+        ],
+        internalType: 'struct RevertOptions',
+        name: 'revertOptions',
+        type: 'tuple',
+      },
+    ],
+    name: 'call',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'address', name: 'receiver', type: 'address' },
+      { internalType: 'bytes', name: 'payload', type: 'bytes' },
+      {
+        components: [
+          { internalType: 'address', name: 'revertAddress', type: 'address' },
+          { internalType: 'bool', name: 'callOnRevert', type: 'bool' },
+          { internalType: 'address', name: 'abortAddress', type: 'address' },
+          { internalType: 'bytes', name: 'revertMessage', type: 'bytes' },
+          {
+            internalType: 'uint256',
+            name: 'onRevertGasLimit',
+            type: 'uint256',
+          },
+        ],
+        internalType: 'struct RevertOptions',
+        name: 'revertOptions',
+        type: 'tuple',
+      },
+    ],
+    name: 'depositAndCall',
+    outputs: [],
+    stateMutability: 'payable',
+    type: 'function',
+  },
+] as const
