@@ -10,7 +10,6 @@ import { Progress } from '@/components/ui/progress'
 import {
   AlertTriangleIcon,
   TrendingDownIcon,
-  GlobeIcon,
   ShieldCheckIcon,
   InfoIcon,
 } from 'lucide-react'
@@ -39,7 +38,6 @@ type BorrowRow = {
   availableNum: number
   available: string
   utilizationPct: number | null
-  chainsCount: number
   loading: boolean
 }
 
@@ -65,12 +63,6 @@ export default function BorrowPage() {
   const rowsBase: BorrowRow[] = useMemo(() => {
     return Object.values(VAULTS).map((v) => {
       const symbol = v.asset.symbol
-      const chainsCount = (Object.keys(CHAINS) as ChainKey[]).reduce(
-        (acc, key) =>
-          acc +
-          (CHAINS[key].tokens.some((t) => t.asset.symbol === symbol) ? 1 : 0),
-        0
-      )
 
       return {
         symbol,
@@ -82,7 +74,6 @@ export default function BorrowPage() {
         availableNum: 0,
         available: '—',
         utilizationPct: null,
-        chainsCount,
         loading: true,
       }
     })
@@ -259,8 +250,6 @@ export default function BorrowPage() {
   const [borrowAmount, setBorrowAmount] = useState<string>('')
   const [isBorrowing, setIsBorrowing] = useState<boolean>(false)
 
-  // Send to (advanced) — defaults to self
-  const [sendAdvanced, setSendAdvanced] = useState(false)
   const [sendChainKey, setSendChainKey] = useState<ChainKey>(currentChainKey)
 
   useEffect(() => {
@@ -277,14 +266,11 @@ export default function BorrowPage() {
   )
   useEffect(() => {
     const target = selected?.symbol
-    const hasSame = target && receiveTokens.includes(target)
+    const hasSame = target && receiveTokens.includes(target as any)
     setReceiveTokenSymbol(hasSame ? (target as string) : receiveTokens[0] || '')
   }, [receiveTokens, selected?.symbol])
 
   const [sendAddress, setSendAddress] = useState('')
-  useEffect(() => {
-    if (!sendAdvanced) setSendAddress(user?.wallet?.address ?? '')
-  }, [sendAdvanced, user?.wallet?.address])
 
   const setMax = () => {
     if (!selected) return
@@ -296,7 +282,8 @@ export default function BorrowPage() {
     Number.isNaN(Number.parseFloat(borrowAmount)) ||
     Number.parseFloat(borrowAmount) <= 0 ||
     !selected ||
-    (sendAdvanced && (!sendChainKey || sendAddress.trim() === '')) ||
+    !sendChainKey ||
+    sendAddress.trim() === '' ||
     (selected && Number.parseFloat(borrowAmount) > selected.availableNum) ||
     isBorrowing
 
@@ -318,7 +305,6 @@ export default function BorrowPage() {
 
       setBorrowAmount('')
       setSelectedSymbol(null)
-      setSendAdvanced(false)
       setSendChainKey(currentChainKey)
       setSendAddress(user?.wallet?.address ?? '')
     } catch (e) {
@@ -443,12 +429,6 @@ export default function BorrowPage() {
                                   <div className="text-gray-400">
                                     {asset.name}
                                   </div>
-                                  <div className="flex items-center space-x-1 mt-1">
-                                    <GlobeIcon className="h-3 w-3 text-cyan-400" />
-                                    <span className="text-xs text-cyan-400">
-                                      {asset.chainsCount} chains
-                                    </span>
-                                  </div>
                                 </div>
                               </div>
 
@@ -512,7 +492,7 @@ export default function BorrowPage() {
                 <Card className="bg-gray-900 border-gray-800">
                   <CardHeader>
                     <CardTitle className="text-white font-heading">
-                      Borrow Details
+                      Smart Borrow
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -524,7 +504,7 @@ export default function BorrowPage() {
                             <label className="text-gray-300 text-sm font-medium">
                               Amount to Borrow
                             </label>
-                            <Tooltip content="Borrow from this pool. Optionally send to another chain and receive as a different token.">
+                            <Tooltip content="Borrow from this vault. Optionally send to another chain and receive as a different token.">
                               <InfoIcon className="h-3.5 w-3.5 text-gray-400" />
                             </Tooltip>
                           </div>
@@ -591,70 +571,40 @@ export default function BorrowPage() {
                                 <InfoIcon className="h-3.5 w-3.5 text-gray-400" />
                               </Tooltip>
                             </div>
-
-                            <label className="flex items-center gap-2 text-sm text-gray-300">
-                              <input
-                                type="checkbox"
-                                checked={sendAdvanced}
-                                onChange={(e) =>
-                                  setSendAdvanced(e.target.checked)
-                                }
-                                className="h-4 w-4 accent-blue-600"
-                              />
-                              Send to another chain
-                            </label>
                           </div>
 
-                          {!sendAdvanced ? (
-                            <div className="text-gray-400 text-sm">
-                              Default: Self (current chain & connected wallet)
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="text-gray-400 text-xs mb-1 block">
+                                Chain
+                              </label>
+                              <select
+                                value={sendChainKey}
+                                onChange={(e) =>
+                                  setSendChainKey(e.target.value as ChainKey)
+                                }
+                                className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 h-11 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                {(Object.keys(CHAINS) as ChainKey[]).map(
+                                  (k) => (
+                                    <option key={k} value={k}>
+                                      {CHAINS[k].label}
+                                    </option>
+                                  )
+                                )}
+                              </select>
                             </div>
-                          ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                              <div>
-                                <label className="text-gray-400 text-xs mb-1 block">
-                                  Chain
-                                </label>
-                                <select
-                                  value={sendChainKey}
-                                  onChange={(e) =>
-                                    setSendChainKey(e.target.value as ChainKey)
-                                  }
-                                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 h-11 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                >
-                                  {(Object.keys(CHAINS) as ChainKey[]).map(
-                                    (k) => (
-                                      <option key={k} value={k}>
-                                        {CHAINS[k].label}
-                                      </option>
-                                    )
-                                  )}
-                                </select>
-                              </div>
-                              <div className="sm:col-span-2">
-                                <label className="text-gray-400 text-xs mb-1 block">
-                                  Address on selected chain
-                                </label>
-                                <Input
-                                  placeholder={addressHint}
-                                  value={sendAddress}
-                                  onChange={(e) =>
-                                    setSendAddress(e.target.value)
-                                  }
-                                  className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 h-11"
-                                />
-                              </div>
+                            <div className="sm:col-span-2">
+                              <label className="text-gray-400 text-xs mb-1 block">
+                                Address on selected chain
+                              </label>
+                              <Input
+                                placeholder={addressHint}
+                                value={sendAddress}
+                                onChange={(e) => setSendAddress(e.target.value)}
+                                className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 h-11"
+                              />
                             </div>
-                          )}
-                        </div>
-
-                        {/* Info note */}
-                        <div className="flex items-start space-x-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                          <AlertTriangleIcon className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
-                          <div className="text-blue-200 text-sm">
-                            Borrowed assets are sourced from unified liquidity.
-                            If you choose another chain, funds can be swapped
-                            and delivered there via the gateway.
                           </div>
                         </div>
 
