@@ -9,12 +9,7 @@ interface ILiquidationManager {
     /// @param repayAsset The asset being repaid
     /// @param repayAmount The amount of debt to repay
     /// @param collateralAsset The asset to be seized
-    function liquidate(
-        address user,
-        address repayAsset,
-        uint256 repayAmount,
-        address collateralAsset
-    ) external;
+    function liquidate(address user, address repayAsset, uint256 repayAmount, address collateralAsset) external;
 
     /// @notice Returns whether a user is eligible for liquidation
     /// @param user The borrower address

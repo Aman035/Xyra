@@ -15,13 +15,12 @@ contract PriceOracle is IPriceOracle, BaseContract {
 
     /// @notice Maps ERC20 token address to Pyth price feed ID
     mapping(address => bytes32) public assetToPythId;
+    mapping(address => uint256) public assetPrice;
 
     /// @dev Normalization factor: Pyth prices use 10^exponent; we normalize to 18 decimals
     uint8 internal constant TARGET_DECIMALS = 18;
 
-    constructor(address _acm, address _pyth) BaseContract(_acm) {
-        pyth = IPyth(_pyth);
-    }
+    constructor(address _acm) BaseContract(_acm) {}
 
     /// @notice Admin function to set the Pyth price feed ID for an ERC20 asset
     function setAssetFeedId(address asset, bytes32 feedId) external onlyEmergencyAdmin {
@@ -32,23 +31,10 @@ contract PriceOracle is IPriceOracle, BaseContract {
     /// @param asset ERC20 token address
     /// @return price Asset price in base units (USD) with 18 decimals
     function getAssetPrice(address asset) external view override returns (uint256 price) {
-        bytes32 feedId = assetToPythId[asset];
-        require(feedId != bytes32(0), "Unsupported asset");
+        price = assetPrice[asset];
+    }
 
-        // Require price to be not older than 60s
-        PythStructs.Price memory p = pyth.getPriceNoOlderThan(feedId, 60);
-        require(p.price > 0, "Invalid price");
-
-        // Pyth prices are in int64 and use an exponent (e.g., -8 = 1e8)
-        int256 priceInt = int256(p.price);
-        int32 expo = p.expo;
-
-        // Convert to uint256 with 18 decimals
-        // Adjust for exponent to normalize to 18 decimals
-        if (expo < -int32(uint32(TARGET_DECIMALS))) {
-            price = uint256(priceInt) * 10 ** TARGET_DECIMALS / (10 ** uint32(uint32(-expo)));
-        } else {
-            price = uint256(priceInt) * 10 ** uint32(int32(uint32(TARGET_DECIMALS)) + expo);
-        }
+    function setAssetPrice(address asset, uint256 price) external {
+        assetPrice[asset] = price;
     }
 }

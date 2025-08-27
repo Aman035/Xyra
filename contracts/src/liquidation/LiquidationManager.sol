@@ -18,7 +18,7 @@
 
 //     // Liquidation bonus (5% = 1.05e27)
 //     uint256 public constant LIQUIDATION_BONUS = 1.05e27;
-    
+
 //     // Maximum amount that can be liquidated in one tx (50%)
 //     uint256 public constant CLOSE_FACTOR = 0.5e27;
 
