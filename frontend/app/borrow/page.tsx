@@ -7,24 +7,25 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
-import {
-  AlertTriangleIcon,
-  TrendingDownIcon,
-  ShieldCheckIcon,
-  InfoIcon,
-} from 'lucide-react'
+import { TrendingDownIcon, ShieldCheckIcon, InfoIcon } from 'lucide-react'
 import { Tooltip } from '@/components/ui/tooltip'
 import { useToast } from '@/components/ui/toast'
 
 import { VAULTS } from '@/lib/vaults'
 import { readContract } from '@/lib/viem'
 import { formatUnits, bytesToHex, padHex } from 'viem'
-import { CHAIN_ID_TO_CHAIN, CHAINS, VM } from '@/lib/chains'
+import {
+  CHAIN_ID_TO_CHAIN,
+  CHAINS,
+  getTokenZrc20Address,
+  VM,
+} from '@/lib/chains'
 import { usePrivy, useSolanaWallets, useWallets } from '@privy-io/react-auth'
 import { borrow } from '@/lib/lendingPool'
 
 const RAY_DECIMALS = 27
 const HF_DECIMALS = 18 // adjust if your contract scales HF differently
+const BIG_HF = 1e6 // anything above this renders as ∞
 
 type ChainKey = keyof typeof CHAINS
 
@@ -52,6 +53,13 @@ function utilBarClass(u: number | null) {
   if (u >= 80) return 'bg-gray-800 [&>div]:bg-red-500'
   if (u >= 50) return 'bg-gray-800 [&>div]:bg-amber-500'
   return 'bg-gray-800 [&>div]:bg-emerald-500'
+}
+
+function hfBarClass(hf: number | null) {
+  if (hf == null) return 'bg-gray-800 [&>div]:bg-gray-600'
+  if (hf === Infinity || hf >= 2) return 'bg-gray-800 [&>div]:bg-emerald-500'
+  if (hf >= 1.5) return 'bg-gray-800 [&>div]:bg-amber-500'
+  return 'bg-gray-800 [&>div]:bg-red-500'
 }
 
 export default function BorrowPage() {
@@ -220,8 +228,13 @@ export default function BorrowPage() {
           functionName: 'getHealthFactor',
           args: [userIdHex],
         })
-        const hf = Number.parseFloat(formatUnits(hfRaw, HF_DECIMALS))
-        if (mounted) setHealthFactor(Number.isFinite(hf) ? hf : null)
+        const parsed = Number.parseFloat(formatUnits(hfRaw, HF_DECIMALS))
+
+        let hfForUi: number | null = Number.isFinite(parsed) ? parsed : null
+        if (hfForUi !== null && hfForUi <= 0) hfForUi = null // no position
+        if (hfForUi !== null && hfForUi > BIG_HF) hfForUi = Infinity // show ∞
+
+        if (mounted) setHealthFactor(hfForUi)
       } catch (e) {
         console.log('getHealthFactor error', e)
         if (mounted) setHealthFactor(null)
@@ -251,6 +264,7 @@ export default function BorrowPage() {
   const [isBorrowing, setIsBorrowing] = useState<boolean>(false)
 
   const [sendChainKey, setSendChainKey] = useState<ChainKey>(currentChainKey)
+  const isZetaAthensDest = sendChainKey === 'zetaAthens'
 
   useEffect(() => {
     setSendChainKey(currentChainKey)
@@ -265,12 +279,20 @@ export default function BorrowPage() {
     receiveTokens[0] || ''
   )
   useEffect(() => {
+    if (isZetaAthensDest && selected?.symbol) {
+      setReceiveTokenSymbol(selected.symbol)
+      return
+    }
     const target = selected?.symbol
     const hasSame = target && receiveTokens.includes(target as any)
     setReceiveTokenSymbol(hasSame ? (target as string) : receiveTokens[0] || '')
-  }, [receiveTokens, selected?.symbol])
+  }, [receiveTokens, selected?.symbol, isZetaAthensDest])
 
   const [sendAddress, setSendAddress] = useState('')
+
+  useEffect(() => {
+    setSendAddress(user?.wallet?.address ?? '')
+  }, [user])
 
   const setMax = () => {
     if (!selected) return
@@ -291,17 +313,27 @@ export default function BorrowPage() {
   // Actions
   // ----------------------------
   const handleBorrow = async () => {
-    if (!selected || !borrowAmount) return
+    const tokenToBeReceived = getTokenZrc20Address(
+      sendChainKey,
+      receiveTokenSymbol
+    )
+
+    if (!selected || !borrowAmount || !tokenToBeReceived) return
 
     try {
       setIsBorrowing(true)
 
       // If you have a `borrow` function available, call it here. Example:
-      // const receipt = await borrow(currentWallet, selected.zrc20, borrowAmount, CHAINS[sendChainKey].id, sendAddress, receiveTokenSymbol)
-      // showToast(`Borrowed. Tx: ${receipt.transactionHash}`)
-
-      // Placeholder UX until wired:
-      showToast(`Borrow simulated for ${borrowAmount} ${selected.symbol}`)
+      const receipt = await borrow(
+        currentWallet,
+        selected.zrc20,
+        borrowAmount,
+        tokenToBeReceived,
+        sendAddress
+      )
+      showToast(
+        `Token Borrow Requested. Tx: ${receipt.transactionHash}\nThis will take a few seconds to reflect`
+      )
 
       setBorrowAmount('')
       setSelectedSymbol(null)
@@ -356,12 +388,16 @@ export default function BorrowPage() {
                     healthFactor
                   )}`}
                 >
-                  {healthFactor == null ? '—' : healthFactor.toFixed(2)}
+                  {healthFactor == null
+                    ? '—'
+                    : healthFactor === Infinity
+                    ? '∞'
+                    : healthFactor.toFixed(2)}
                 </div>
                 <div className="text-gray-400 text-sm">
                   {healthFactor == null
                     ? 'Connect to view'
-                    : healthFactor >= 2
+                    : healthFactor >= 2 || healthFactor === Infinity
                     ? 'Safe'
                     : healthFactor >= 1.5
                     ? 'Moderate Risk'
@@ -375,7 +411,7 @@ export default function BorrowPage() {
                   ? 0
                   : Math.min((healthFactor / 3) * 100, 100)
               }
-              className="mt-3 h-2"
+              className={`mt-3 h-2 ${hfBarClass(healthFactor)}`}
             />
           </CardContent>
         </Card>
@@ -504,7 +540,7 @@ export default function BorrowPage() {
                             <label className="text-gray-300 text-sm font-medium">
                               Amount to Borrow
                             </label>
-                            <Tooltip content="Borrow from this vault. Optionally send to another chain and receive as a different token.">
+                            <Tooltip content="Borrow from this vault. Optionally send to another chain and receive as a different token, we take care of all the swaps required.">
                               <InfoIcon className="h-3.5 w-3.5 text-gray-400" />
                             </Tooltip>
                           </div>
@@ -534,13 +570,20 @@ export default function BorrowPage() {
                                 onChange={(e) =>
                                   setReceiveTokenSymbol(e.target.value)
                                 }
-                                className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 h-12 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                disabled={isZetaAthensDest}
+                                className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 h-12 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-70"
                               >
-                                {receiveTokens.map((s) => (
-                                  <option key={s} value={s}>
-                                    Receive as {s}
+                                {isZetaAthensDest && selected ? (
+                                  <option value={selected.symbol}>
+                                    Receive as {selected.symbol}
                                   </option>
-                                ))}
+                                ) : (
+                                  receiveTokens.map((s) => (
+                                    <option key={s} value={s}>
+                                      Receive as {s}
+                                    </option>
+                                  ))
+                                )}
                               </select>
                             </div>
                           </div>

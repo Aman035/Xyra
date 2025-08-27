@@ -107,3 +107,15 @@ export const LABEL_TO_CHAIN = Object.fromEntries(
 export const CHAIN_ID_TO_CHAIN = Object.fromEntries(
   Object.entries(CHAINS).map(([k, v]) => [v.id, v])
 ) as Record<number, Chain>
+
+export const getTokenZrc20Address = (
+  chainKey: keyof typeof CHAINS,
+  symbol: string
+): string | undefined => {
+  const chain = CHAINS[chainKey]
+  if (!chain) return undefined
+
+  const token = chain.tokens.find((t) => t.asset.symbol === symbol)
+  if (!token) return undefined
+  return token.zrcTokenAddress
+}
