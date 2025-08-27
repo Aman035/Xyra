@@ -79,7 +79,31 @@ export const CHAINS: Record<
     id: 7001,
     vm: VM.EVM,
     label: 'Zeta Athens',
-    tokens: [],
+    tokens: [
+      {
+        asset: ASSETS.ETH,
+        address: '0x05BA149A7bd6dC1F937fA9046A9e05C05f3b18b0',
+        zrcTokenAddress: '0x05BA149A7bd6dC1F937fA9046A9e05C05f3b18b0',
+      },
+      {
+        asset: ASSETS.SOL,
+        address: '0xADF73ebA3Ebaa7254E859549A44c74eF7cff7501',
+        zrcTokenAddress: '0xADF73ebA3Ebaa7254E859549A44c74eF7cff7501',
+      },
+      {
+        asset: ASSETS.USDC,
+        zrcTokenAddress: '0xcC683A782f4B30c138787CB5576a86AF66fdc31d',
+        address: '0xcC683A782f4B30c138787CB5576a86AF66fdc31d',
+      },
+    ],
     gateway: '',
   },
 } as const
+
+export const LABEL_TO_CHAIN = Object.fromEntries(
+  Object.entries(CHAINS).map(([k, v]) => [v.label, v])
+) as Record<string, Chain>
+
+export const CHAIN_ID_TO_CHAIN = Object.fromEntries(
+  Object.entries(CHAINS).map(([k, v]) => [v.id, v])
+) as Record<number, Chain>

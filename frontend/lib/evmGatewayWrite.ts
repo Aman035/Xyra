@@ -1,5 +1,31 @@
-import { WalletClient, toHex, zeroAddress, parseEther } from 'viem'
+import {
+  WalletClient,
+  toHex,
+  zeroAddress,
+  parseEther,
+  createPublicClient,
+  http,
+  TransactionReceipt,
+} from 'viem'
 import { EVM_GATEWAY_ABI } from './abis'
+
+async function waitFor3Confirm({
+  client,
+  hash,
+}: {
+  client: WalletClient
+  hash: `0x${string}`
+}): Promise<TransactionReceipt> {
+  const publicClient = createPublicClient({
+    chain: client.chain!,
+    transport: http(),
+  })
+
+  return await publicClient.waitForTransactionReceipt({
+    hash,
+    confirmations: 3,
+  })
+}
 
 export async function depositAndCall({
   client,
@@ -14,7 +40,7 @@ export async function depositAndCall({
 }) {
   const payloadHex = typeof payload === 'string' ? payload : toHex(payload)
 
-  return await client.writeContract({
+  const hash = await client.writeContract({
     address: gateway,
     abi: EVM_GATEWAY_ABI,
     functionName: 'depositAndCall',
@@ -31,6 +57,8 @@ export async function depositAndCall({
     ],
     value: parseEther(etherAmount),
   })
+
+  return await waitFor3Confirm({ client, hash })
 }
 
 export async function gatewayCall({
@@ -46,7 +74,7 @@ export async function gatewayCall({
 }) {
   const payloadHex = typeof payload === 'string' ? payload : toHex(payload)
 
-  return await client.writeContract({
+  const hash = await client.writeContract({
     address: gateway,
     abi: EVM_GATEWAY_ABI,
     functionName: 'call',
@@ -62,4 +90,6 @@ export async function gatewayCall({
       },
     ],
   })
+
+  return await waitFor3Confirm({ client, hash })
 }
