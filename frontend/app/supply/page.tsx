@@ -172,6 +172,7 @@ export default function SupplyPage() {
     )
     return match ?? 'sepolia'
   }, [currentChain])
+  const isZetaAthens = currentChainKey === 'zetaAthens'
 
   // Tokens allowed on the current chain
   const allowedTokens = useMemo(
@@ -219,6 +220,13 @@ export default function SupplyPage() {
       setInputTokenSymbol(allowedTokens[0]?.symbol ?? '')
     }
   }, [allowedTokens, inputTokenSymbol])
+
+  // NEW: when on Zeta Athens, always use the selected vault's own token
+  useEffect(() => {
+    if (isZetaAthens && selected?.symbol) {
+      setInputTokenSymbol(selected.symbol)
+    }
+  }, [isZetaAthens, selected?.symbol])
 
   // ----------------------------
   // Actions
@@ -432,7 +440,10 @@ export default function SupplyPage() {
                             <label className="text-gray-300 text-sm font-medium">
                               Amount to Supply
                             </label>
-                            <Tooltip content="Choose any supported token on this chain. We automatically swap to the vault asset and supply">
+                            <Tooltip
+                              content="Choose any supported token on this chain. We automatically swap to the vault asset and supply.
+                            On Zeta Athens, supply must use the vault&rsquo;s ZRC20 token."
+                            >
                               <InfoIcon className="h-3.5 w-3.5 text-gray-400" />
                             </Tooltip>
                           </div>
@@ -462,13 +473,21 @@ export default function SupplyPage() {
                                 onChange={(e) =>
                                   setInputTokenSymbol(e.target.value)
                                 }
-                                className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 h-12 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                disabled={isZetaAthens}
+                                className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 h-12 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-70"
                               >
-                                {allowedTokens.map((t) => (
-                                  <option key={t.symbol} value={t.symbol}>
-                                    {t.symbol}
+                                {isZetaAthens && selected ? (
+                                  // Show only the vault's own token on Zeta Athens
+                                  <option value={selected.symbol}>
+                                    {selected.symbol}
                                   </option>
-                                ))}
+                                ) : (
+                                  allowedTokens.map((t) => (
+                                    <option key={t.symbol} value={t.symbol}>
+                                      {t.symbol}
+                                    </option>
+                                  ))
+                                )}
                               </select>
                             </div>
                           </div>
