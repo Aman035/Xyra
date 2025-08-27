@@ -81,10 +81,10 @@ export async function gatewayCall({
       payloadHex,
       {
         revertAddress: client.account?.address as `0x${string}`,
-        callOnRevert: true,
+        callOnRevert: false,
         abortAddress: zeroAddress,
-        revertMessage: toHex('Revert'),
-        onRevertGasLimit: BigInt(100000000),
+        revertMessage: '0x',
+        onRevertGasLimit: BigInt(200000),
       },
     ],
   })

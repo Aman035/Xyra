@@ -18,7 +18,7 @@ export const supply = async (
     ['string', 'bytes', 'uint256', 'address', 'address', 'uint256'],
     [
       'supply',
-      onBehalfOfAddress,
+      onBehalfOfAddress.toLowerCase(),
       onBehalfOfChainId,
       supplyVaultZrc20,
       zeroAddress,
@@ -67,8 +67,8 @@ export const borrow = async (
     ['string', 'bytes', 'uint256', 'address', 'address', 'uint256'],
     [
       'borrow',
-      onAddress,
-      zeroAddress, // withdraw chainId - automatically decided based on borrowTokenAddress
+      onAddress.toLowerCase(),
+      0, // withdraw chainId - automatically decided based on borrowTokenAddress
       borrowVaultZrc20,
       borrowTokenAddress,
       parseEther(vaultAmountBorrowed), // TODO: Might need to change this acc to vault asset decimals
