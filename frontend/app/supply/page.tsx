@@ -245,7 +245,7 @@ export default function SupplyPage() {
     setIsSupplying(true)
 
     try {
-      const txHash = await supply(
+      const txReceipt = await supply(
         currentWallet,
         selected.zrc20,
         supplyAmount,
@@ -253,7 +253,7 @@ export default function SupplyPage() {
         onBehalfAddress
       )
       showToast(
-        `Token Supplied. Tx: ${txHash}\nThis will take a few seconds to reflect in the Asset Vault`
+        `Token Supplied. Tx: ${txReceipt.transactionHash}\nThis will take a few seconds to reflect in the Asset Vault`
       )
     } catch (err) {
       console.log(err)
@@ -420,7 +420,7 @@ export default function SupplyPage() {
                 <Card className="bg-gray-900 border-gray-800">
                   <CardHeader>
                     <CardTitle className="text-white font-heading">
-                      Supply Details
+                      Smart Supply
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -432,7 +432,7 @@ export default function SupplyPage() {
                             <label className="text-gray-300 text-sm font-medium">
                               Amount to Supply
                             </label>
-                            <Tooltip content="Smart Lend: provide any supported token on this chain; we swap to the vault asset, then supply.">
+                            <Tooltip content="Choose any supported token on this chain. We automatically swap to the vault asset and supply">
                               <InfoIcon className="h-3.5 w-3.5 text-gray-400" />
                             </Tooltip>
                           </div>
@@ -481,7 +481,7 @@ export default function SupplyPage() {
                               <span className="text-gray-300 text-sm font-medium">
                                 On behalf of
                               </span>
-                              <Tooltip content="Advanced: supply for a different address on a specific chain">
+                              <Tooltip content="Advanced: Supply for a different address on a specific chain">
                                 <InfoIcon className="h-3.5 w-3.5 text-gray-400" />
                               </Tooltip>
                             </div>

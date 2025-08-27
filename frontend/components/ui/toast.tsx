@@ -55,18 +55,28 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           <div
             key={toast.id}
             className={cn(
-              'flex items-start justify-between rounded-lg px-4 py-2 shadow-lg min-w-[200px] max-w-sm',
+              // cap width to viewport on mobile; use a sane max on larger
+              'flex items-start rounded-lg px-4 py-2 shadow-lg min-w-[200px] max-w-[calc(100vw-2rem)] sm:max-w-sm',
               variantStyles[toast.variant]
             )}
           >
-            <span className="text-sm font-medium break-words whitespace-pre-line">
-              {toast.message}
-            </span>
+            {/* Make text flex-1 and allow it to actually shrink/wrap */}
+            <div className="flex-1 min-w-0">
+              <span
+                className="block text-sm font-medium font-mono break-all whitespace-pre-wrap"
+                // overflow-wrap:anywhere is the most forgiving; tailwind's break-words maps to it in newer versions,
+                // but add inline style to be extra safe across browsers
+                style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+              >
+                {toast.message}
+              </span>
+            </div>
             <button
               onClick={() =>
                 setToasts((prev) => prev.filter((t) => t.id !== toast.id))
               }
               className="ml-2 p-1 hover:opacity-80 shrink-0"
+              aria-label="Close toast"
             >
               <X className="h-4 w-4" />
             </button>
