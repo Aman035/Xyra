@@ -64,12 +64,10 @@ export async function depositAndCall({
 export async function gatewayCall({
   client,
   gateway,
-  receiver,
   payload,
 }: {
   client: WalletClient
   gateway: `0x${string}`
-  receiver: `0x${string}`
   payload: `0x${string}` | Uint8Array
 }) {
   const payloadHex = typeof payload === 'string' ? payload : toHex(payload)
@@ -79,7 +77,7 @@ export async function gatewayCall({
     abi: EVM_GATEWAY_ABI,
     functionName: 'call',
     args: [
-      receiver,
+      process.env.NEXT_PUBLIC_LENDING_POOL as `0x${string}`,
       payloadHex,
       {
         revertAddress: client.account?.address as `0x${string}`,

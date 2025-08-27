@@ -15,14 +15,17 @@ import {
   InfoIcon,
 } from 'lucide-react'
 import { Tooltip } from '@/components/ui/tooltip'
+import { useToast } from '@/components/ui/toast'
 
 import { VAULTS } from '@/lib/vaults'
-import { ERC20_ABI } from '@/lib/abis'
 import { readContract } from '@/lib/viem'
-import { formatUnits } from 'viem'
-import { CHAINS, VM } from '@/lib/chains'
+import { formatUnits, bytesToHex, padHex } from 'viem'
+import { CHAIN_ID_TO_CHAIN, CHAINS, VM } from '@/lib/chains'
+import { usePrivy, useSolanaWallets, useWallets } from '@privy-io/react-auth'
+import { borrow } from '@/lib/lendingPool'
 
 const RAY_DECIMALS = 27
+const HF_DECIMALS = 18 // adjust if your contract scales HF differently
 
 type ChainKey = keyof typeof CHAINS
 
@@ -53,16 +56,14 @@ function utilBarClass(u: number | null) {
   return 'bg-gray-800 [&>div]:bg-emerald-500'
 }
 
-/** TODO: replace with wallet chain (wagmi/viem) */
-function getCurrentChainKey(): ChainKey {
-  return 'sepolia'
-}
-
 export default function BorrowPage() {
-  /** Base rows from VAULTS (static) */
+  const { showToast } = useToast()
+
+  // ----------------------------
+  // Base rows from VAULTS (static)
+  // ----------------------------
   const rowsBase: BorrowRow[] = useMemo(() => {
     return Object.values(VAULTS).map((v) => {
-      // how many chains list this asset?
       const symbol = v.asset.symbol
       const chainsCount = (Object.keys(CHAINS) as ChainKey[]).reduce(
         (acc, key) =>
@@ -89,7 +90,9 @@ export default function BorrowPage() {
 
   const [rows, setRows] = useState<BorrowRow[]>(rowsBase)
 
-  /** Load on-chain data */
+  // ----------------------------
+  // Load on-chain data for rows
+  // ----------------------------
   useEffect(() => {
     let cancelled = false
 
@@ -99,18 +102,8 @@ export default function BorrowPage() {
       const next = await Promise.all(
         rowsBase.map(async (r) => {
           try {
-            // decimals (fallback 18)
-            let decimals = 18
-            // If your ZRC20s implement ERC20 decimals, uncomment:
-            // try {
-            //   decimals = await readContract<number>({
-            //     address: r.zrc20,
-            //     functionName: 'decimals',
-            //     abi: ERC20_ABI,
-            //   })
-            // } catch {}
+            const decimals = 18 // adjust per-asset if needed
 
-            // total supplied & borrowed (underlying units)
             const totalSupplied = await readContract<bigint>({
               functionName: 'getTotalSupplied',
               args: [r.zrc20],
@@ -171,43 +164,84 @@ export default function BorrowPage() {
     }
   }, [rowsBase])
 
-  /** Selection + form state */
-  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null)
-  const selected = rows.find((r) => r.symbol === selectedSymbol) || null
+  // ----------------------------
+  // User & wallet state (Privy) — mirror SupplyPage
+  // ----------------------------
+  const { user } = usePrivy()
+  const { wallets: evmWallets } = useWallets()
+  const { wallets: solWallets } = useSolanaWallets()
 
-  const [borrowAmount, setBorrowAmount] = useState<string>('') // keep string for <input />
-  const [isBorrowing, setIsBorrowing] = useState<boolean>(false)
+  const currentWallet = useMemo(() => {
+    const evm = (evmWallets as any[]).map((w) => ({
+      ...w,
+      chainType: 'ethereum',
+    }))
+    const sol = (solWallets as any[]).map((w) => ({
+      ...w,
+      chainType: 'solana',
+    }))
+    const all = [...evm, ...sol]
+    const addr = user?.wallet?.address?.toLowerCase()
+    if (!addr) return undefined
+    return all.find((w) => w.address?.toLowerCase?.() === addr)
+  }, [evmWallets, solWallets, user?.wallet?.address])
 
-  // current chain + receive options
-  const currentChainKey = getCurrentChainKey()
+  const currentChain = useMemo(() => {
+    if (!currentWallet) return CHAINS.sepolia
 
-  // Send to (advanced) — defaults to self
-  const [sendAdvanced, setSendAdvanced] = useState(false)
-  const [sendChainKey, setSendChainKey] = useState<ChainKey>(currentChainKey)
+    if ((currentWallet as any).chainType === 'solana') {
+      return CHAINS.solDevnet // adjust if you support more solana nets
+    }
 
-  // receive token options on selected chain
-  const receiveTokens = useMemo(() => {
-    return CHAINS[sendChainKey].tokens.map((t) => t.asset.symbol)
-  }, [sendChainKey])
+    const raw = String((currentWallet as any).chainId ?? 'eip155:11155111')
+    const evmId = raw.includes(':') ? raw.split(':')[1] : raw
+    return CHAIN_ID_TO_CHAIN[parseInt(evmId)] ?? CHAINS.sepolia
+  }, [currentWallet])
 
-  // prefer to receive the same symbol if available on that chain; else first supported
-  const [receiveTokenSymbol, setReceiveTokenSymbol] = useState<string>('')
-  useEffect(() => {
-    const target = selected?.symbol
-    const hasSame = target && receiveTokens.includes(target)
-    setReceiveTokenSymbol(hasSame ? (target as string) : receiveTokens[0] || '')
-  }, [sendChainKey, selectedSymbol]) // eslint-disable-line react-hooks/exhaustive-deps
+  const currentChainKey: ChainKey = useMemo(() => {
+    const match = (Object.keys(CHAINS) as ChainKey[]).find(
+      (k) => CHAINS[k] === currentChain
+    )
+    return match ?? 'sepolia'
+  }, [currentChain])
 
-  const [sendAddress, setSendAddress] = useState('')
-
-  // Health Factor (placeholder / optional)
-  // If you port UILib.computeUserId to TS, you can call getHealthFactor(userId).
+  // ----------------------------
+  // Health Factor — get from contract using universal identity bytes
+  // ----------------------------
   const [healthFactor, setHealthFactor] = useState<number | null>(null)
 
-  const newHealthFactor = useMemo(() => {
-    // Without user context, we can’t compute HF accurately. Keep null.
-    return healthFactor
-  }, [borrowAmount, selectedSymbol, healthFactor])
+  useEffect(() => {
+    let mounted = true
+    async function fetchHF() {
+      try {
+        if (!currentWallet?.address) {
+          if (mounted) setHealthFactor(null)
+          return
+        }
+
+        const userIdHex = await toUserIdBytes(currentWallet)
+        if (!userIdHex) {
+          if (mounted) setHealthFactor(null)
+          return
+        }
+
+        const hfRaw = await readContract<bigint>({
+          functionName: 'getHealthFactor',
+          args: [userIdHex],
+        })
+        const hf = Number.parseFloat(formatUnits(hfRaw, HF_DECIMALS))
+        if (mounted) setHealthFactor(Number.isFinite(hf) ? hf : null)
+      } catch (e) {
+        console.log('getHealthFactor error', e)
+        if (mounted) setHealthFactor(null)
+      }
+    }
+
+    fetchHF()
+    return () => {
+      mounted = false
+    }
+  }, [currentWallet?.address, currentWallet])
 
   const getHealthFactorColor = (factor: number | null) => {
     if (factor == null) return 'text-gray-400'
@@ -215,6 +249,42 @@ export default function BorrowPage() {
     if (factor >= 1.5) return 'text-yellow-400'
     return 'text-red-400'
   }
+
+  // ----------------------------
+  // Selection + form state
+  // ----------------------------
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null)
+  const selected = rows.find((r) => r.symbol === selectedSymbol) || null
+
+  const [borrowAmount, setBorrowAmount] = useState<string>('')
+  const [isBorrowing, setIsBorrowing] = useState<boolean>(false)
+
+  // Send to (advanced) — defaults to self
+  const [sendAdvanced, setSendAdvanced] = useState(false)
+  const [sendChainKey, setSendChainKey] = useState<ChainKey>(currentChainKey)
+
+  useEffect(() => {
+    setSendChainKey(currentChainKey)
+  }, [currentChainKey])
+
+  // receive token options on selected chain
+  const receiveTokens = useMemo(() => {
+    return CHAINS[sendChainKey].tokens.map((t) => t.asset.symbol)
+  }, [sendChainKey])
+
+  const [receiveTokenSymbol, setReceiveTokenSymbol] = useState<string>(
+    receiveTokens[0] || ''
+  )
+  useEffect(() => {
+    const target = selected?.symbol
+    const hasSame = target && receiveTokens.includes(target)
+    setReceiveTokenSymbol(hasSame ? (target as string) : receiveTokens[0] || '')
+  }, [receiveTokens, selected?.symbol])
+
+  const [sendAddress, setSendAddress] = useState('')
+  useEffect(() => {
+    if (!sendAdvanced) setSendAddress(user?.wallet?.address ?? '')
+  }, [sendAdvanced, user?.wallet?.address])
 
   const setMax = () => {
     if (!selected) return
@@ -230,31 +300,42 @@ export default function BorrowPage() {
     (selected && Number.parseFloat(borrowAmount) > selected.availableNum) ||
     isBorrowing
 
+  // ----------------------------
+  // Actions
+  // ----------------------------
   const handleBorrow = async () => {
     if (!selected || !borrowAmount) return
 
-    // TODO:
-    // - If sendAdvanced && sendChainKey !== currentChainKey:
-    //   • choose withdrawAsset based on `receiveTokenSymbol` on destination chain
-    //   • package UILib.UniversalIdentity {chainId, address bytes}
-    //   • call your gateway route (onCall->borrow) so pool swaps/withdraws cross-chain
-    // - Else call local `borrow(selected.zrc20, amount, onBehalf=self)` where receiver is local wallet
-    setIsBorrowing(true)
-    await new Promise((r) => setTimeout(r, 1500))
-    setIsBorrowing(false)
-    setBorrowAmount('')
-    setSelectedSymbol(null)
-    setSendAdvanced(false)
-    setSendChainKey(currentChainKey)
-    setSendAddress('')
-  }
+    try {
+      setIsBorrowing(true)
 
-  const toNumber = (v: string) => Number.parseFloat(v.replace(/,/g, ''))
+      // If you have a `borrow` function available, call it here. Example:
+      // const receipt = await borrow(currentWallet, selected.zrc20, borrowAmount, CHAINS[sendChainKey].id, sendAddress, receiveTokenSymbol)
+      // showToast(`Borrowed. Tx: ${receipt.transactionHash}`)
+
+      // Placeholder UX until wired:
+      showToast(`Borrow simulated for ${borrowAmount} ${selected.symbol}`)
+
+      setBorrowAmount('')
+      setSelectedSymbol(null)
+      setSendAdvanced(false)
+      setSendChainKey(currentChainKey)
+      setSendAddress(user?.wallet?.address ?? '')
+    } catch (e) {
+      console.log('borrow failed', e)
+      showToast('Borrow Failed', 'error')
+    } finally {
+      setIsBorrowing(false)
+    }
+  }
 
   const onBehalfVM = CHAINS[sendChainKey].vm
   const addressHint =
     onBehalfVM === VM.EVM ? '0x… (EVM address)' : 'Base58… (Solana address)'
 
+  // ----------------------------
+  // Render
+  // ----------------------------
   return (
     <main className="container mx-auto px-6 py-8">
       <div className="mx-auto max-w-7xl 2xl:max-w-[90rem]">
@@ -268,13 +349,13 @@ export default function BorrowPage() {
           </p>
         </div>
 
-        {/* Health Factor (optional) */}
+        {/* Health Factor */}
         <Card className="mb-6 bg-gray-900 border-gray-800">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <ShieldCheckIcon
-                  className={`h-6 w-6 ${getHealthFactorColor(newHealthFactor)}`}
+                  className={`h-6 w-6 ${getHealthFactorColor(healthFactor)}`}
                 />
                 <div>
                   <div className="text-white font-medium">Health Factor</div>
@@ -286,17 +367,17 @@ export default function BorrowPage() {
               <div className="text-right">
                 <div
                   className={`text-2xl font-bold ${getHealthFactorColor(
-                    newHealthFactor
+                    healthFactor
                   )}`}
                 >
-                  {newHealthFactor == null ? '—' : newHealthFactor.toFixed(2)}
+                  {healthFactor == null ? '—' : healthFactor.toFixed(2)}
                 </div>
                 <div className="text-gray-400 text-sm">
-                  {newHealthFactor == null
+                  {healthFactor == null
                     ? 'Connect to view'
-                    : newHealthFactor >= 2
+                    : healthFactor >= 2
                     ? 'Safe'
-                    : newHealthFactor >= 1.5
+                    : healthFactor >= 1.5
                     ? 'Moderate Risk'
                     : 'High Risk'}
                 </div>
@@ -304,9 +385,9 @@ export default function BorrowPage() {
             </div>
             <Progress
               value={
-                newHealthFactor == null
+                healthFactor == null
                   ? 0
-                  : Math.min((newHealthFactor / 3) * 100, 100)
+                  : Math.min((healthFactor / 3) * 100, 100)
               }
               className="mt-3 h-2"
             />
@@ -448,7 +529,6 @@ export default function BorrowPage() {
                             </Tooltip>
                           </div>
 
-                          {/* 1 col on mobile; 5 cols on lg (3/5 + 2/5 = 60/40) */}
                           <div className="mt-2 grid grid-cols-1 lg:grid-cols-5 lg:items-center gap-3">
                             {/* 60% amount */}
                             <div className="relative lg:col-span-3">
@@ -612,4 +692,33 @@ export default function BorrowPage() {
       </div>
     </main>
   )
+}
+
+// ----------------------------
+// Helpers
+// ----------------------------
+async function toUserIdBytes(wallet: any): Promise<`0x${string}` | null> {
+  try {
+    if (!wallet?.address) return null
+    if (wallet.chainType === 'ethereum') {
+      // pad to 32 bytes if your contract expects bytes32; adjust if raw 20 bytes are accepted
+      return padHex(wallet.address as `0x${string}`, {
+        size: 32,
+      }) as `0x${string}`
+    }
+    if (wallet.chainType === 'solana') {
+      // Lazy-load bs58 only when needed
+      const m = await import('bs58')
+      const decoded = m.default.decode(wallet.address) // Uint8Array
+      // Ensure 32 bytes (Solana pubkey is 32 bytes). Left-pad to 32 if necessary
+      if (decoded.length === 32) return bytesToHex(decoded) as `0x${string}`
+      const padded = new Uint8Array(32)
+      // left-pad so the right-most bytes are the address
+      padded.set(decoded, 32 - decoded.length)
+      return bytesToHex(padded) as `0x${string}`
+    }
+  } catch (e) {
+    console.log('toUserIdBytes error', e)
+  }
+  return null
 }
