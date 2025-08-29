@@ -233,9 +233,7 @@ export default function BorrowPage() {
           args: [userIdHex],
         })
 
-        console.log(hfRaw)
         const parsed = Number.parseFloat(formatUnits(hfRaw, HF_DECIMALS))
-        console.log(parsed)
 
         let hfForUi: number | null = Number.isFinite(parsed) ? parsed : null
         if (hfForUi !== null && hfForUi <= 0) hfForUi = null // no position
@@ -336,7 +334,8 @@ export default function BorrowPage() {
         selected.zrc20,
         borrowAmount,
         tokenToBeReceived,
-        sendAddress
+        sendAddress,
+        CHAINS[sendChainKey].id
       )
       showToast(
         `Token Borrow Requested. Tx: ${receipt.transactionHash}\nThis will take a few seconds to reflect`
