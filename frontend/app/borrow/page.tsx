@@ -22,6 +22,7 @@ import {
 } from '@/lib/chains'
 import { usePrivy, useSolanaWallets, useWallets } from '@privy-io/react-auth'
 import { borrow } from '@/lib/lendingPool'
+import { computeUserId } from '@/lib/universalIdentity'
 
 const RAY_DECIMALS = 27
 const HF_DECIMALS = 18 // adjust if your contract scales HF differently
@@ -218,7 +219,10 @@ export default function BorrowPage() {
           return
         }
 
-        const userIdHex = await toUserIdBytes(currentWallet)
+        const userIdHex = computeUserId(
+          currentWallet.chainId.split(':')[1],
+          currentWallet.address
+        )
         if (!userIdHex) {
           if (mounted) setHealthFactor(null)
           return
@@ -228,7 +232,10 @@ export default function BorrowPage() {
           functionName: 'getHealthFactor',
           args: [userIdHex],
         })
+
+        console.log(hfRaw)
         const parsed = Number.parseFloat(formatUnits(hfRaw, HF_DECIMALS))
+        console.log(parsed)
 
         let hfForUi: number | null = Number.isFinite(parsed) ? parsed : null
         if (hfForUi !== null && hfForUi <= 0) hfForUi = null // no position
@@ -685,33 +692,4 @@ export default function BorrowPage() {
       </div>
     </main>
   )
-}
-
-// ----------------------------
-// Helpers
-// ----------------------------
-async function toUserIdBytes(wallet: any): Promise<`0x${string}` | null> {
-  try {
-    if (!wallet?.address) return null
-    if (wallet.chainType === 'ethereum') {
-      // pad to 32 bytes if your contract expects bytes32; adjust if raw 20 bytes are accepted
-      return padHex(wallet.address as `0x${string}`, {
-        size: 32,
-      }) as `0x${string}`
-    }
-    if (wallet.chainType === 'solana') {
-      // Lazy-load bs58 only when needed
-      const m = await import('bs58')
-      const decoded = m.default.decode(wallet.address) // Uint8Array
-      // Ensure 32 bytes (Solana pubkey is 32 bytes). Left-pad to 32 if necessary
-      if (decoded.length === 32) return bytesToHex(decoded) as `0x${string}`
-      const padded = new Uint8Array(32)
-      // left-pad so the right-most bytes are the address
-      padded.set(decoded, 32 - decoded.length)
-      return bytesToHex(padded) as `0x${string}`
-    }
-  } catch (e) {
-    console.log('toUserIdBytes error', e)
-  }
-  return null
 }

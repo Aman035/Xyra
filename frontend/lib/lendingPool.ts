@@ -18,7 +18,7 @@ export const supply = async (
     ['string', 'bytes', 'uint256', 'address', 'address', 'uint256'],
     [
       'supply',
-      onBehalfOfAddress.toLowerCase(),
+      onBehalfOfAddress,
       onBehalfOfChainId,
       supplyVaultZrc20,
       zeroAddress,
@@ -67,7 +67,7 @@ export const borrow = async (
     ['string', 'bytes', 'uint256', 'address', 'address', 'uint256'],
     [
       'borrow',
-      onAddress.toLowerCase(),
+      onAddress,
       0, // withdraw chainId - automatically decided based on borrowTokenAddress
       borrowVaultZrc20,
       borrowTokenAddress,
