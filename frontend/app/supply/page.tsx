@@ -1,346 +1,581 @@
-"use client"
+'use client'
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeftIcon, InfoIcon, TrendingUpIcon, CheckCircleIcon, GlobeIcon } from "lucide-react"
-import Link from "next/link"
+import Image from 'next/image'
+import { useEffect, useMemo, useState } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
+import { InfoIcon, TrendingUpIcon } from 'lucide-react'
+import { Tooltip } from '@/components/ui/tooltip'
+import { Progress } from '@/components/ui/progress'
+import { useToast } from '@/components/ui/toast'
 
-const SUPPLY_ASSETS = [
-  {
-    symbol: "USDC",
-    name: "USD Coin",
-    icon: "💰",
-    balance: "1,250.00",
-    apy: "4.25%",
-    supplied: "0.00",
-    price: "$1.00",
-    totalSupplied: "$1.2B",
-    chains: ["Ethereum", "Polygon", "Arbitrum"],
-  },
-  {
-    symbol: "ETH",
-    name: "Ethereum",
-    icon: "⟠",
-    balance: "2.45",
-    apy: "3.85%",
-    supplied: "0.00",
-    price: "$2,340.50",
-    totalSupplied: "$890M",
-    chains: ["Ethereum", "Arbitrum", "Optimism"],
-  },
-  {
-    symbol: "WBTC",
-    name: "Wrapped Bitcoin",
-    icon: "₿",
-    balance: "0.125",
-    apy: "2.95%",
-    supplied: "0.00",
-    price: "$43,250.00",
-    totalSupplied: "$340M",
-    chains: ["Ethereum", "Polygon"],
-  },
-  {
-    symbol: "DAI",
-    name: "Dai Stablecoin",
-    icon: "◈",
-    balance: "850.00",
-    apy: "4.15%",
-    supplied: "0.00",
-    price: "$1.00",
-    totalSupplied: "$280M",
-    chains: ["Ethereum", "Polygon", "Arbitrum"],
-  },
-]
+import { VAULTS } from '@/lib/vaults'
+import { readContract } from '@/lib/viem'
+import { formatUnits } from 'viem'
+import { CHAIN_ID_TO_CHAIN, CHAINS, VM } from '@/lib/chains'
+import { usePrivy, useSolanaWallets, useWallets } from '@privy-io/react-auth'
+import { supply } from '@/lib/lendingPool'
+
+export const RAY_DECIMALS = 27
+
+export type UiRow = {
+  symbol: string
+  name: string
+  logo: string
+  tvl: string
+  utilizationPct: number | null
+  apy: string
+  apyPct?: number | null
+  zrc20: `0x${string}`
+  metadata?: string
+  loadingVault: boolean
+}
+
+export type ChainKey = keyof typeof CHAINS
+
+export function pctLabel(n?: number | null, min = 2, max = 2) {
+  if (n == null || !Number.isFinite(n)) return '—'
+  if (n > 0 && n < 0.01) return '<0.01%'
+  return `${n.toFixed(Math.min(Math.max(min, 0), Math.max(max, min)))}%`
+}
+
+function utilBarClass(u: number | null) {
+  if (u == null) return ''
+  if (u >= 80) return 'bg-gray-800 [&>div]:bg-red-500'
+  if (u >= 50) return 'bg-gray-800 [&>div]:bg-amber-500'
+  return 'bg-gray-800 [&>div]:bg-emerald-500'
+}
 
 export default function SupplyPage() {
-  const [selectedAsset, setSelectedAsset] = useState<(typeof SUPPLY_ASSETS)[0] | null>(null)
-  const [supplyAmount, setSupplyAmount] = useState("")
+  const { showToast } = useToast()
+
+  // ----------------------------
+  // Vault data
+  // ----------------------------
+  const rowsBase: UiRow[] = useMemo(() => {
+    return Object.values(VAULTS).map((v) => ({
+      symbol: v.asset.symbol,
+      name: v.asset.name,
+      logo: v.asset.logo,
+      tvl: '—',
+      utilizationPct: null,
+      apy: '—',
+      apyPct: null,
+      zrc20: v.zrc20TokenAddress as `0x${string}`,
+      metadata: v.metadata,
+      loadingVault: true,
+    }))
+  }, [])
+
+  const [rows, setRows] = useState<UiRow[]>(rowsBase)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadVaultData() {
+      setRows((prev) => prev.map((r) => ({ ...r, loadingVault: true })))
+
+      const next = await Promise.all(
+        rowsBase.map(async (r) => {
+          try {
+            const decimals = 18
+
+            const totalAssets = await readContract<bigint>({
+              functionName: 'getTotalSupplied',
+              args: [r.zrc20],
+            })
+            const tvlNum = Number.parseFloat(formatUnits(totalAssets, decimals))
+            const tvlStrNum = tvlNum.toLocaleString(undefined, {
+              maximumFractionDigits: 6,
+            })
+            const tvlStr = `${tvlStrNum} ${r.symbol}`
+
+            const utilRay = await readContract<bigint>({
+              functionName: '_calculateUtilization',
+              args: [r.zrc20],
+            })
+            const utilPct =
+              Number.parseFloat(formatUnits(utilRay, RAY_DECIMALS)) * 100
+
+            const supplyRateRay = await readContract<bigint>({
+              functionName: 'getCurrentSupplyRate',
+              args: [r.zrc20],
+            })
+            const apyPct =
+              Number.parseFloat(formatUnits(supplyRateRay, RAY_DECIMALS)) * 100
+            const apyStr = pctLabel(apyPct)
+
+            return {
+              ...r,
+              tvl: tvlStr,
+              utilizationPct: Number.isFinite(utilPct) ? utilPct : 0,
+              apy: apyStr,
+              apyPct: Number.isFinite(apyPct) ? apyPct : 0,
+              loadingVault: false,
+            }
+          } catch (err) {
+            console.log(err)
+            return { ...r, loadingVault: false }
+          }
+        })
+      )
+
+      if (!cancelled) setRows(next)
+    }
+
+    loadVaultData()
+    return () => {
+      cancelled = true
+    }
+  }, [rowsBase])
+
+  // ----------------------------
+  // User & wallet state (Privy)
+  // ----------------------------
+  const { user } = usePrivy()
+  const { wallets: evmWallets } = useWallets()
+  const { wallets: solWallets } = useSolanaWallets()
+
+  const currentWallet = useMemo(() => {
+    const evm = (evmWallets as any[]).map((w) => ({
+      ...w,
+      chainType: 'ethereum',
+    }))
+    const sol = (solWallets as any[]).map((w) => ({
+      ...w,
+      chainType: 'solana',
+    }))
+    const all = [...evm, ...sol]
+    const addr = user?.wallet?.address?.toLowerCase()
+    if (!addr) return undefined
+    return all.find((w) => w.address?.toLowerCase?.() === addr)
+  }, [evmWallets, solWallets, user?.wallet?.address])
+
+  const currentChain = useMemo(() => {
+    if (!currentWallet) return CHAINS.sepolia
+
+    if ((currentWallet as any).chainType === 'solana') {
+      return CHAINS.solDevnet // adjust if you support more solana nets
+    }
+
+    const raw = String((currentWallet as any).chainId ?? 'eip155:11155111')
+    const evmId = raw.includes(':') ? raw.split(':')[1] : raw
+    return CHAIN_ID_TO_CHAIN[parseInt(evmId)] ?? CHAINS.sepolia
+  }, [currentWallet])
+
+  // Compute the key for the current chain (used to sync select defaults)
+  const currentChainKey: ChainKey = useMemo(() => {
+    const match = (Object.keys(CHAINS) as ChainKey[]).find(
+      (k) => CHAINS[k] === currentChain
+    )
+    return match ?? 'sepolia'
+  }, [currentChain])
+  const isZetaAthens = currentChainKey === 'zetaAthens'
+
+  // Tokens allowed on the current chain
+  const allowedTokens = useMemo(
+    () =>
+      currentChain.tokens.map((t) => ({
+        symbol: t.asset.symbol,
+        chainAddress: t.address,
+        zrcAddress: t.zrcTokenAddress,
+        logo: (t.asset as any)?.logo ?? '',
+      })),
+    [currentChain]
+  )
+
+  // ----------------------------
+  // Form state (user-controlled)
+  // ----------------------------
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null)
+  const selected = rows.find((r) => r.symbol === selectedSymbol) || null
+
+  const [supplyAmount, setSupplyAmount] = useState('')
   const [isSupplying, setIsSupplying] = useState(false)
 
+  // Keep chain as a key, not label (stable)
+  const [onBehalfChainKey, setOnBehalfChainKey] = useState<ChainKey>('sepolia')
+
+  // Address defaults to the connected wallet, but user can override
+  const [onBehalfAddress, setOnBehalfAddress] = useState<string>('')
+
+  // Sync defaults when upstream values change
+  useEffect(() => {
+    setOnBehalfChainKey(currentChainKey)
+  }, [currentChainKey])
+
+  useEffect(() => {
+    setOnBehalfAddress(user?.wallet?.address ?? '')
+  }, [user?.wallet?.address])
+
+  // Token select state + clamp when chain (allowedTokens) changes
+  const [inputTokenSymbol, setInputTokenSymbol] = useState<string>(
+    allowedTokens[0]?.symbol ?? ''
+  )
+
+  useEffect(() => {
+    if (!allowedTokens.find((t) => t.symbol === inputTokenSymbol)) {
+      setInputTokenSymbol(allowedTokens[0]?.symbol ?? '')
+    }
+  }, [allowedTokens, inputTokenSymbol])
+
+  // NEW: when on Zeta Athens, always use the selected vault's own token
+  useEffect(() => {
+    if (isZetaAthens && selected?.symbol) {
+      setInputTokenSymbol(selected.symbol)
+    }
+  }, [isZetaAthens, selected?.symbol])
+
+  // ----------------------------
+  // Actions
+  // ----------------------------
+  const disableSubmit =
+    !supplyAmount ||
+    Number.isNaN(Number.parseFloat(supplyAmount)) ||
+    Number.parseFloat(supplyAmount) <= 0 ||
+    !selected ||
+    !inputTokenSymbol ||
+    !onBehalfAddress ||
+    !onBehalfChainKey ||
+    isSupplying
+
   const handleSupply = async () => {
-    if (!selectedAsset || !supplyAmount) return
-
+    if (
+      !selected ||
+      !supplyAmount ||
+      !inputTokenSymbol ||
+      !currentWallet ||
+      !onBehalfAddress
+    )
+      return
     setIsSupplying(true)
-    // Simulate transaction
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+
+    try {
+      const txReceipt = await supply(
+        currentWallet,
+        selected.zrc20,
+        supplyAmount,
+        CHAINS[onBehalfChainKey].id,
+        onBehalfAddress
+      )
+      showToast(
+        `Token Supplied. Tx: ${txReceipt.transactionHash}\nThis will take a few seconds to reflect in the Asset Vault`
+      )
+    } catch (err) {
+      console.log(err)
+      showToast('Supply Failed', 'error')
+    }
+
     setIsSupplying(false)
-    setSupplyAmount("")
-    setSelectedAsset(null)
+    setSupplyAmount('')
+    setSelectedSymbol(null)
+    setOnBehalfChainKey(currentChainKey)
+    setOnBehalfAddress(user?.wallet?.address ?? '')
   }
 
-  const calculateEarnings = () => {
-    if (!selectedAsset || !supplyAmount) return "0.00"
-    const amount = Number.parseFloat(supplyAmount)
-    const apy = Number.parseFloat(selectedAsset.apy.replace("%", "")) / 100
-    return ((amount * apy) / 365).toFixed(6)
-  }
+  // ----------------------------
+  // UI helpers
+  // ----------------------------
+  const DotSpin = () => (
+    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white align-middle" />
+  )
 
+  const onBehalfVM = CHAINS[onBehalfChainKey].vm
+  const addressHint =
+    onBehalfVM === VM.EVM ? '0x… (EVM address)' : 'Base58… (Solana address)'
+
+  // ----------------------------
+  // Render
+  // ----------------------------
   return (
-    <div className="min-h-screen bg-gray-950">
-      {/* Header */}
-      <header className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-md">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link href="/" className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors">
-                <ArrowLeftIcon className="h-4 w-4" />
-                <span>Back to Dashboard</span>
-              </Link>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center">
-                <GlobeIcon className="h-4 w-4 text-white" />
-              </div>
-              <h1 className="font-heading text-2xl text-white">Xyra.fi - Supply Assets</h1>
-            </div>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white">Connected</Button>
-          </div>
+    <main className="container mx-auto px-6 py-8">
+      {/* widened container for large screens */}
+      <div className="mx-auto max-w-7xl 2xl:max-w-[90rem]">
+        <div className="text-center mb-8">
+          <h2 className="font-heading text-4xl text-white mb-4">
+            Supply & Earn Across Chains
+          </h2>
+          <p className="text-gray-400 text-lg">
+            Supply your crypto assets to unified liquidity pools and earn
+            competitive yields across multiple blockchains
+          </p>
         </div>
-      </header>
 
-      <main className="container mx-auto px-6 py-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-8">
-            <h2 className="font-heading text-4xl text-white mb-4">Supply & Earn Across Chains</h2>
-            <p className="text-gray-400 text-lg">
-              Supply your crypto assets to unified liquidity pools and earn competitive yields across multiple
-              blockchains
-            </p>
-          </div>
-
-          <Tabs defaultValue="supply" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 bg-gray-800 border-gray-700">
-              <TabsTrigger
-                value="supply"
-                className="text-gray-300 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
-              >
-                Supply Assets
-              </TabsTrigger>
-              <TabsTrigger
-                value="positions"
-                className="text-gray-300 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
-              >
-                Your Positions
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="supply" className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Asset Selection */}
-                <div className="lg:col-span-2">
-                  <Card className="bg-gray-900 border-gray-800">
-                    <CardHeader>
-                      <CardTitle className="text-white font-heading">Select Asset to Supply</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {SUPPLY_ASSETS.map((asset) => (
+        <Tabs defaultValue="supply" className="w-full">
+          <TabsContent value="supply" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Vault list */}
+              <div className="lg:col-span-2">
+                <Card className="bg-gray-900 border-gray-800">
+                  <CardHeader>
+                    <CardTitle className="text-white font-heading">
+                      Select Vault to Supply
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {rows.map((v) => {
+                        const isSelected = selectedSymbol === v.symbol
+                        return (
                           <div
-                            key={asset.symbol}
+                            key={v.symbol}
                             className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                              selectedAsset?.symbol === asset.symbol
-                                ? "border-blue-500 bg-blue-500/10"
-                                : "border-gray-700 bg-gray-800/50 hover:bg-gray-800"
+                              isSelected
+                                ? 'border-blue-500 bg-blue-500/10'
+                                : 'border-gray-700 bg-gray-800/50 hover:bg-gray-800'
                             }`}
-                            onClick={() => setSelectedAsset(asset)}
+                            onClick={() => setSelectedSymbol(v.symbol)}
                           >
+                            {/* Row 1: Logo + name + APY + TVL */}
                             <div className="flex items-center justify-between">
                               <div className="flex items-center space-x-4">
-                                <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center text-white text-lg">
-                                  {asset.icon}
+                                <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden">
+                                  {v.logo ? (
+                                    <Image
+                                      src={v.logo}
+                                      alt={v.name}
+                                      width={32}
+                                      height={32}
+                                    />
+                                  ) : (
+                                    <span className="text-white text-lg">
+                                      {v.symbol}
+                                    </span>
+                                  )}
                                 </div>
                                 <div>
-                                  <div className="text-white font-bold text-lg">{asset.symbol}</div>
-                                  <div className="text-gray-400">{asset.name}</div>
-                                  <div className="flex items-center space-x-1 mt-1">
-                                    <GlobeIcon className="h-3 w-3 text-cyan-400" />
-                                    <span className="text-xs text-cyan-400">{asset.chains.length} chains</span>
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-white font-bold text-lg">
+                                      {v.symbol}
+                                    </div>
+                                    <Tooltip content={v.metadata}>
+                                      <InfoIcon
+                                        className="h-3.5 w-3.5 text-gray-400"
+                                        tabIndex={0}
+                                      />
+                                    </Tooltip>
                                   </div>
+                                  <div className="text-gray-400">{v.name}</div>
                                 </div>
                               </div>
+
+                              {/* APY */}
                               <div className="text-right">
-                                <div className="text-green-400 font-bold text-lg">{asset.apy}</div>
-                                <div className="text-gray-400 text-sm">Supply APY</div>
+                                <div className="text-green-400 font-bold text-lg">
+                                  {v.apy}
+                                </div>
+                                <div className="text-gray-400 text-sm">
+                                  Supply APY
+                                </div>
                               </div>
+
+                              {/* TVL */}
                               <div className="text-right">
                                 <div className="text-white font-medium">
-                                  {asset.balance} {asset.symbol}
+                                  {v.loadingVault ? (
+                                    <span className="inline-flex items-center gap-2">
+                                      <DotSpin />{' '}
+                                      <span className="align-middle">—</span>
+                                    </span>
+                                  ) : (
+                                    v.tvl
+                                  )}
                                 </div>
-                                <div className="text-gray-400 text-sm">Available</div>
+                                <div className="text-gray-400 text-sm">
+                                  Vault TVL
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
 
-                {/* Supply Form */}
-                <div>
-                  <Card className="bg-gray-900 border-gray-800">
-                    <CardHeader>
-                      <CardTitle className="text-white font-heading">Supply Details</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {selectedAsset ? (
-                        <div className="space-y-6">
-                          <div>
-                            <label className="text-gray-300 text-sm font-medium mb-2 block">Amount to Supply</label>
-                            <div className="relative">
+                            {/* Row 2: Utilization bar */}
+                            <div className="mt-3">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-gray-400">
+                                  Utilization
+                                </span>
+                                <span className="text-white">
+                                  {v.loadingVault || v.utilizationPct === null
+                                    ? '—'
+                                    : `${v.utilizationPct.toFixed(1)}%`}
+                                </span>
+                              </div>
+                              <Progress
+                                className={`mt-1 h-2 ${utilBarClass(
+                                  v.utilizationPct
+                                )}`}
+                                value={
+                                  v.utilizationPct === null
+                                    ? 0
+                                    : Math.max(
+                                        0,
+                                        Math.min(100, v.utilizationPct)
+                                      )
+                                }
+                              />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Supply Form */}
+              <div>
+                <Card className="bg-gray-900 border-gray-800">
+                  <CardHeader>
+                    <CardTitle className="text-white font-heading">
+                      Smart Supply
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {selected ? (
+                      <div className="space-y-6">
+                        {/* Amount + Pay With */}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <label className="text-gray-300 text-sm font-medium">
+                              Amount to Supply
+                            </label>
+                            <Tooltip
+                              content="Choose any supported token on this chain. We automatically swap to the vault asset and supply.
+                            On Zeta Athens, supply must use the vault&rsquo;s ZRC20 token."
+                            >
+                              <InfoIcon className="h-3.5 w-3.5 text-gray-400" />
+                            </Tooltip>
+                          </div>
+
+                          <div className="mt-2 grid grid-cols-1 lg:grid-cols-5 lg:items-center gap-3">
+                            {/* amount */}
+                            <div className="relative lg:col-span-3">
                               <Input
                                 type="number"
                                 placeholder="0.00"
                                 value={supplyAmount}
-                                onChange={(e) => setSupplyAmount(e.target.value)}
-                                className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 pr-20"
+                                onChange={(e) =>
+                                  setSupplyAmount(e.target.value)
+                                }
+                                className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 pr-24 h-12"
                               />
                               <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                                {selectedAsset.symbol}
+                                {inputTokenSymbol || selected.symbol}
                               </div>
                             </div>
-                            <div className="flex justify-between mt-2">
-                              <span className="text-gray-400 text-sm">
-                                Balance: {selectedAsset.balance} {selectedAsset.symbol}
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-blue-400 hover:text-blue-300 p-0 h-auto"
-                                onClick={() => setSupplyAmount(selectedAsset.balance)}
+
+                            {/* token selector */}
+                            <div className="lg:col-span-2">
+                              <select
+                                aria-label="Pay with"
+                                value={inputTokenSymbol}
+                                onChange={(e) =>
+                                  setInputTokenSymbol(e.target.value)
+                                }
+                                disabled={isZetaAthens}
+                                className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 h-12 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-70"
                               >
-                                MAX
-                              </Button>
+                                {isZetaAthens && selected ? (
+                                  // Show only the vault's own token on Zeta Athens
+                                  <option value={selected.symbol}>
+                                    {selected.symbol}
+                                  </option>
+                                ) : (
+                                  allowedTokens.map((t) => (
+                                    <option key={t.symbol} value={t.symbol}>
+                                      {t.symbol}
+                                    </option>
+                                  ))
+                                )}
+                              </select>
                             </div>
                           </div>
+                        </div>
 
-                          <div className="space-y-3 p-4 rounded-lg bg-gray-800">
-                            <div className="flex justify-between">
-                              <span className="text-gray-300">Supply APY</span>
-                              <span className="text-green-400 font-bold">{selectedAsset.apy}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-300">Daily Earnings</span>
-                              <span className="text-white">
-                                ~{calculateEarnings()} {selectedAsset.symbol}
+                        {/* On behalf of */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-300 text-sm font-medium">
+                                On behalf of
                               </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-300">Available Chains</span>
-                              <span className="text-cyan-400">{selectedAsset.chains.length}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-300">Collateral Factor</span>
-                              <span className="text-white">85%</span>
+                              <Tooltip content="Advanced: Supply for a different address on a specific chain">
+                                <InfoIcon className="h-3.5 w-3.5 text-gray-400" />
+                              </Tooltip>
                             </div>
                           </div>
-
-                          <div className="flex items-start space-x-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                            <InfoIcon className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
-                            <div className="text-blue-200 text-sm">
-                              Assets are automatically deployed across multiple chains for optimal yield. Supplied
-                              assets can be used as collateral to borrow other assets.
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="text-gray-400 text-xs mb-1 block">
+                                Chain
+                              </label>
+                              <select
+                                value={onBehalfChainKey}
+                                onChange={(e) =>
+                                  setOnBehalfChainKey(
+                                    e.target.value as ChainKey
+                                  )
+                                }
+                                className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 h-11 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                {(Object.keys(CHAINS) as ChainKey[]).map(
+                                  (k) => (
+                                    <option key={k} value={k}>
+                                      {CHAINS[k].label}
+                                    </option>
+                                  )
+                                )}
+                              </select>
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="text-gray-400 text-xs mb-1 block">
+                                Address on selected chain
+                              </label>
+                              <Input
+                                placeholder={addressHint}
+                                value={onBehalfAddress}
+                                onChange={(e) =>
+                                  setOnBehalfAddress(e.target.value)
+                                }
+                                className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 h-11"
+                              />
                             </div>
                           </div>
-
-                          <Button
-                            onClick={handleSupply}
-                            disabled={!supplyAmount || Number.parseFloat(supplyAmount) <= 0 || isSupplying}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3"
-                          >
-                            {isSupplying ? (
-                              <div className="flex items-center space-x-2">
-                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                <span>Supplying...</span>
-                              </div>
-                            ) : (
-                              `Supply ${selectedAsset.symbol}`
-                            )}
-                          </Button>
                         </div>
-                      ) : (
-                        <div className="text-center py-8">
-                          <div className="w-16 h-16 rounded-full bg-blue-600/20 flex items-center justify-center mx-auto mb-4">
-                            <TrendingUpIcon className="h-8 w-8 text-blue-400" />
-                          </div>
-                          <p className="text-gray-400">Select an asset to start supplying</p>
+
+                        <Button
+                          onClick={handleSupply}
+                          disabled={disableSubmit}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3"
+                        >
+                          {isSupplying ? (
+                            <div className="flex items-center space-x-2">
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              <span>Supplying...</span>
+                            </div>
+                          ) : (
+                            `Supply ${selected.symbol}`
+                          )}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <div className="w-16 h-16 rounded-full bg-blue-600/20 flex items-center justify-center mx-auto mb-4">
+                          <TrendingUpIcon className="h-8 w-8 text-blue-400" />
                         </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
+                        <p className="text-gray-400">
+                          Select a vault to start supplying
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
-            </TabsContent>
-
-            <TabsContent value="positions" className="space-y-6">
-              <Card className="bg-gray-900 border-gray-800">
-                <CardHeader>
-                  <CardTitle className="text-white font-heading">Your Supply Positions</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {/* Mock positions */}
-                    <div className="p-4 rounded-lg bg-gray-800">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white">
-                            💰
-                          </div>
-                          <div>
-                            <div className="text-white font-bold">USDC</div>
-                            <div className="text-gray-400 text-sm">Supplied 30 days ago</div>
-                            <div className="flex items-center space-x-1 mt-1">
-                              <GlobeIcon className="h-3 w-3 text-cyan-400" />
-                              <span className="text-xs text-cyan-400">3 chains</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-white font-bold">500.00 USDC</div>
-                          <div className="text-green-400 text-sm">+1.75 USDC earned</div>
-                        </div>
-                        <Badge className="bg-green-600 text-white">Active</Badge>
-                      </div>
-                    </div>
-
-                    <div className="p-4 rounded-lg bg-gray-800">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white">
-                            ⟠
-                          </div>
-                          <div>
-                            <div className="text-white font-bold">ETH</div>
-                            <div className="text-gray-400 text-sm">Supplied 15 days ago</div>
-                            <div className="flex items-center space-x-1 mt-1">
-                              <GlobeIcon className="h-3 w-3 text-cyan-400" />
-                              <span className="text-xs text-cyan-400">3 chains</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-white font-bold">1.25 ETH</div>
-                          <div className="text-green-400 text-sm">+0.0198 ETH earned</div>
-                        </div>
-                        <Badge className="bg-green-600 text-white">Active</Badge>
-                      </div>
-                    </div>
-
-                    <div className="text-center py-8 text-gray-400">
-                      <CheckCircleIcon className="h-12 w-12 mx-auto mb-4 text-green-400" />
-                      <p>You're earning yield across multiple chains!</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </div>
-      </main>
-    </div>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </main>
   )
 }

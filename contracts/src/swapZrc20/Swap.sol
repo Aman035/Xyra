@@ -97,7 +97,7 @@ contract Swap is
         );
 
         if (!IZRC20(targetToken).transfer(
-            address(this),
+            recipient,
             out
         )) {
             revert TransferFailed(

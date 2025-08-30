@@ -2,39 +2,39 @@
   "chainId": 7001,
   "contracts": {
     "AccessControlManager": {
-      "address": "0x299CA815ef296D42e7B74Da86EC737Ad928B1BcC",
-      "block": 12396312,
-      "transaction": "0x68a8d871cbecf97adea6fd62f4fac5e07f9bd3c2b361eb844090f836ba419727"
+      "address": "0x01335A08Fd2de2F57794E9DC081a11936F139DC1",
+      "block": 12410637,
+      "transaction": "0xa6fe52396d47b6815201ca766246d3b1da58fbe8529b1d32bfd6bc886cc24ce7"
     },
     "PriceOracle": {
-      "address": "0x9B76DC7305698B67f48D9D5a9948A9f06F8c99Ff",
-      "block": 12396313,
-      "transaction": "0xfae11c02dcb658e921dfa83cb657b1aa19b5319c8ecd2242318dff6f7713b21c"
+      "address": "0xDd33f3F29f1D41FF7E82ce4bb861051DAE0a7e5E",
+      "block": 12410638,
+      "transaction": "0xe288789b959237bf6881e08549befab76001b2fa448c2198c45e0d92775e27c6"
     },
     "InterestRateManager": {
-      "address": "0x591fe4Cf3639f2561fcc17e9D7D9f33412637f43",
-      "block": 12396314,
-      "transaction": "0x5b1582e942215ca84e95b8312389075bbb6f6b510544b4e21bbb1f36b63851e1"
+      "address": "0xe64e99D90a702d5F40b80730A8beE7F0B1c21186",
+      "block": 12410639,
+      "transaction": "0x1a23f5f1ef13a0d6adc220c5fc8f47e99f8f44ae547facbddd2e51899696d266"
     },
     "CollateralManager": {
-      "address": "0xBa7674d7837f0Db9D40DB4b91d85697d044269B9",
-      "block": 12396315,
-      "transaction": "0x151dee63b6a0dd76a3e958e9331a68eaa5a7f538e7e00b5dd4d4308459868077"
+      "address": "0xa2A7B313Cc506c8D8887FCAbEbd58E4d1BE567Fe",
+      "block": 12410640,
+      "transaction": "0x448509c45e3653bb5604c30ae4739f73a07f29442fa884a7dcb7426e16216191"
     },
     "PoolManager": {
-      "address": "0x8e386e671a3c3f75cC8a0803eEb207876F7b8FeE",
-      "block": 12396316,
-      "transaction": "0xf9a7db6ea2f871926365a0cd78c1d9335de377a053c1752f749fb07b72fafee6"
+      "address": "0xf76C0491B360Ce9625226C85A70b6C6516dFf7AF",
+      "block": 12410641,
+      "transaction": "0x0bc12303c33db6ec7015ffbd221eaa8b00509fff7d7933e6ec26c9f758b04703"
     },
     "Swap": {
-      "address": "0xC8690214fE1b139019A1d438B30be68b33875A86",
-      "block": 12396317,
-      "transaction": "0xc5ade0957e00e7dd85895d9ca8bef6a7066476bf7c742422a1686a4b12e23fb6"
+      "address": "0xDaC125f9350cD25786Cfd5c8eb2b6837c5e7Ce6B",
+      "block": 12410642,
+      "transaction": "0x3661821af03eff36783ca063efea9f9c8ea0784280737b14a4b376fc8b938109"
     },
     "LendingPool": {
-      "address": "0x1620dd953da5B27E7F787F4b72a9D0013FB01b23",
-      "block": 12396318,
-      "transaction": "0x0412f7c334e506af8d21c0f69115e9814a8e83ebaf395ddfa37be4293b22d0d1"
+      "address": "0x3e89A980F8f160228Bc37E2f95ceF2c8d5e443b2",
+      "block": 12410644,
+      "transaction": "0x3f05d5e08725fb72d44dee9873215a2423ad6b4ac6a678e3c393305b62231642"
     }
   },
   "config": {
@@ -48,9 +48,9 @@
       "ETH/USD": "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace"
     },
     "deployment": {
-      "totalGasUsed": "12594327",
-      "totalPaid": "0.063687965530142856",
-      "averageGasPrice": "5.058110308"
+      "totalGasUsed": "12695036",
+      "totalPaid": "0.06348345235645302",
+      "averageGasPrice": "5.000486267"
     }
   }
 }
