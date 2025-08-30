@@ -33,9 +33,9 @@ contract CreateVaultScript is Script {
     function run() external {
         vm.startBroadcast();
 
-        priceOracle = PriceOracle(0x9B76DC7305698B67f48D9D5a9948A9f06F8c99Ff);
-        collateralManager = CollateralManager(0xBa7674d7837f0Db9D40DB4b91d85697d044269B9);
-        poolManager = PoolManager(0x8e386e671a3c3f75cC8a0803eEb207876F7b8FeE);
+        priceOracle = PriceOracle(0xDd33f3F29f1D41FF7E82ce4bb861051DAE0a7e5E);
+        collateralManager = CollateralManager(0xa2A7B313Cc506c8D8887FCAbEbd58E4d1BE567Fe);
+        poolManager = PoolManager(0xf76C0491B360Ce9625226C85A70b6C6516dFf7AF);
 
         // Setup each token in the pool
         for (uint256 i = 0; i < tokens.length; i++) {
