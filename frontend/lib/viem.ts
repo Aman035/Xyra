@@ -59,8 +59,6 @@ export const writeContract = async ({
     abi,
     functionName: functionName as any,
     args,
-    account: (signer as any).account!,
-    chain: (signer as any).chain ?? undefined,
   })
 
   if (!waitForReceipt) return { hash }
