@@ -299,7 +299,7 @@ contract LendingPool is ILendingPool, PoolConfigurationProvider, ReentrancyGuard
 
     function _repay(address asset, uint256 amount, UILib.UniversalIdentity memory repayer, UILib.UniversalIdentity memory onBehalfOf) internal returns (uint256) {
         bytes32 onBehalfOfUserId = UILib.computeUserId(onBehalfOf);
-        userDebt[onBehalfOfUserId][asset] += amount;
+        userDebt[onBehalfOfUserId][asset] -= amount;
         require(amount > 0, "LendingPool: amount is zero");
 
         _updateLiquidityIndex(asset);
