@@ -21,6 +21,26 @@ export const ERC20_ABI = [
     inputs: [{ name: 'owner', type: 'address' }],
     outputs: [{ type: 'uint256' }],
   },
+  {
+    type: 'function',
+    name: 'allowance',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+    ],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'approve',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ type: 'bool' }],
+  },
 ] as const
 
 export const PRICE_ORACLE_ABI = [
@@ -35,50 +55,42 @@ export const PRICE_ORACLE_ABI = [
 
 export const ERC4626_ABI = [
   {
-    type: "function",
-    name: "previewRedeem",
+    type: 'function',
+    name: 'previewRedeem',
     inputs: [
       {
-        name: "shares",
-        type: "uint256",
-        internalType: "uint256",
+        name: 'shares',
+        type: 'uint256',
+        internalType: 'uint256',
       },
     ],
     outputs: [
       {
-        name: "",
-        type: "uint256",
-        internalType: "uint256",
+        name: '',
+        type: 'uint256',
+        internalType: 'uint256',
       },
     ],
-    stateMutability: "view",
+    stateMutability: 'view',
   },
-] as const;
+] as const
 
 export const POOL_MANAGER_ABI = [
   {
-    type: "function",
-    name: "getVault",
-    inputs: [
-      { name: "asset", type: "address", internalType: "address" }
-    ],
-    outputs: [
-      { name: "", type: "address", internalType: "address" }
-    ],
-    stateMutability: "view",
+    type: 'function',
+    name: 'getVault',
+    inputs: [{ name: 'asset', type: 'address', internalType: 'address' }],
+    outputs: [{ name: '', type: 'address', internalType: 'address' }],
+    stateMutability: 'view',
   },
   {
-    type: "function",
-    name: "getLiquidityIndex",
-    inputs: [
-      { name: "asset", type: "address", internalType: "address" }
-    ],
-    outputs: [
-      { name: "", type: "uint256", internalType: "uint256" }
-    ],
-    stateMutability: "view",
+    type: 'function',
+    name: 'getLiquidityIndex',
+    inputs: [{ name: 'asset', type: 'address', internalType: 'address' }],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
   },
-] as const;
+] as const
 
 export const LENDING_POOL_ABI = [
   {
@@ -214,24 +226,24 @@ export const LENDING_POOL_ABI = [
     stateMutability: 'view',
   },
   {
-      type: "function",
-      name: "getUserSuppliedAsset",
-      inputs: [
-        { name: "user", type: "bytes32", internalType: "bytes32" },
-        { name: "asset", type: "address", internalType: "address" }
-      ],
-      outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
-      stateMutability: "view"
+    type: 'function',
+    name: 'getUserSuppliedAsset',
+    inputs: [
+      { name: 'user', type: 'bytes32', internalType: 'bytes32' },
+      { name: 'asset', type: 'address', internalType: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
   },
   {
-      type: "function",
-      name: "getUserBorrowedAsset",
-      inputs: [
-        { name: "user", type: "bytes32", internalType: "bytes32" },
-        { name: "asset", type: "address", internalType: "address" }
-      ],
-      outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
-      stateMutability: "view"
+    type: 'function',
+    name: 'getUserBorrowedAsset',
+    inputs: [
+      { name: 'user', type: 'bytes32', internalType: 'bytes32' },
+      { name: 'asset', type: 'address', internalType: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
   },
   {
     type: 'function',
@@ -1347,4 +1359,3 @@ export const EVM_GATEWAY_ABI = [
     type: 'function',
   },
 ] as const
-
