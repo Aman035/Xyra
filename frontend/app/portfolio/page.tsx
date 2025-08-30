@@ -536,7 +536,7 @@ export default function PortfolioPage() {
                                 </div>
                                 <div className="justify-self-end">
                                   <div className="text-white font-medium">
-                                    {position.suppliedNum.toFixed(2)}{" "}
+                                    {position.suppliedNum}{" "}
                                     {position.symbol}
                                   </div>
                                   <div className="text-gray-400">
@@ -634,7 +634,7 @@ export default function PortfolioPage() {
                                 </div>
                                 <div className="justify-self-end">
                                   <div className="text-white font-medium">
-                                    {position.borrowedNum.toFixed(2)}{" "}
+                                    {position.borrowedNum}{" "}
                                     {position.symbol}
                                   </div>
                                   <div className="text-gray-400">
