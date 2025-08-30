@@ -33,6 +33,53 @@ export const PRICE_ORACLE_ABI = [
   },
 ] as const
 
+export const ERC4626_ABI = [
+  {
+    type: "function",
+    name: "previewRedeem",
+    inputs: [
+      {
+        name: "shares",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+] as const;
+
+export const POOL_MANAGER_ABI = [
+  {
+    type: "function",
+    name: "getVault",
+    inputs: [
+      { name: "asset", type: "address", internalType: "address" }
+    ],
+    outputs: [
+      { name: "", type: "address", internalType: "address" }
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getLiquidityIndex",
+    inputs: [
+      { name: "asset", type: "address", internalType: "address" }
+    ],
+    outputs: [
+      { name: "", type: "uint256", internalType: "uint256" }
+    ],
+    stateMutability: "view",
+  },
+] as const;
+
 export const LENDING_POOL_ABI = [
   {
     type: 'constructor',
@@ -165,6 +212,26 @@ export const LENDING_POOL_ABI = [
       },
     ],
     stateMutability: 'view',
+  },
+  {
+      type: "function",
+      name: "getUserSuppliedAsset",
+      inputs: [
+        { name: "user", type: "bytes32", internalType: "bytes32" },
+        { name: "asset", type: "address", internalType: "address" }
+      ],
+      outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+      stateMutability: "view"
+  },
+  {
+      type: "function",
+      name: "getUserBorrowedAsset",
+      inputs: [
+        { name: "user", type: "bytes32", internalType: "bytes32" },
+        { name: "asset", type: "address", internalType: "address" }
+      ],
+      outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+      stateMutability: "view"
   },
   {
     type: 'function',

@@ -23,7 +23,7 @@ import { PRICE_ORACLE_ABI } from '../lib/abis'
 // Constants
 // ----------------------------
 const RAY_DECIMALS = 27
-const TOTAL_ACTIVE_CHAINS = 4
+export const TOTAL_ACTIVE_CHAINS = 4
 
 // ----------------------------
 // Types
