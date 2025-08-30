@@ -24,3 +24,16 @@ export const VAULTS = {
     decimals: 6,
   },
 } as const
+
+type Vault = (typeof VAULTS)[keyof typeof VAULTS]
+/**
+ * Find a vault by its zrc20TokenAddress.
+ * @param address zrc20 token address (case-insensitive)
+ * @returns The matching vault object, or undefined if not found
+ */
+export function getVaultByZRC20(address: string): Vault | undefined {
+  const addrLower = address.toLowerCase()
+  return Object.values(VAULTS).find(
+    (vault) => vault.zrc20TokenAddress.toLowerCase() === addrLower
+  )
+}
