@@ -7,3 +7,6 @@
 [submodule "lib/protocol-contracts"]
 	path = lib/protocol-contracts
 	url = https://github.com/zeta-chain/protocol-contracts
+[submodule "contracts/lib/toolkit"]
+	path = contracts/lib/toolkit
+	url = https://github.com/zeta-chain/toolkit

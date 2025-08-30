@@ -1,0 +1,56 @@
+{
+  "chainId": 7001,
+  "contracts": {
+    "AccessControlManager": {
+      "address": "0x299CA815ef296D42e7B74Da86EC737Ad928B1BcC",
+      "block": 12396312,
+      "transaction": "0x68a8d871cbecf97adea6fd62f4fac5e07f9bd3c2b361eb844090f836ba419727"
+    },
+    "PriceOracle": {
+      "address": "0x9B76DC7305698B67f48D9D5a9948A9f06F8c99Ff",
+      "block": 12396313,
+      "transaction": "0xfae11c02dcb658e921dfa83cb657b1aa19b5319c8ecd2242318dff6f7713b21c"
+    },
+    "InterestRateManager": {
+      "address": "0x591fe4Cf3639f2561fcc17e9D7D9f33412637f43",
+      "block": 12396314,
+      "transaction": "0x5b1582e942215ca84e95b8312389075bbb6f6b510544b4e21bbb1f36b63851e1"
+    },
+    "CollateralManager": {
+      "address": "0xBa7674d7837f0Db9D40DB4b91d85697d044269B9",
+      "block": 12396315,
+      "transaction": "0x151dee63b6a0dd76a3e958e9331a68eaa5a7f538e7e00b5dd4d4308459868077"
+    },
+    "PoolManager": {
+      "address": "0x8e386e671a3c3f75cC8a0803eEb207876F7b8FeE",
+      "block": 12396316,
+      "transaction": "0xf9a7db6ea2f871926365a0cd78c1d9335de377a053c1752f749fb07b72fafee6"
+    },
+    "Swap": {
+      "address": "0xC8690214fE1b139019A1d438B30be68b33875A86",
+      "block": 12396317,
+      "transaction": "0xc5ade0957e00e7dd85895d9ca8bef6a7066476bf7c742422a1686a4b12e23fb6"
+    },
+    "LendingPool": {
+      "address": "0x1620dd953da5B27E7F787F4b72a9D0013FB01b23",
+      "block": 12396318,
+      "transaction": "0x0412f7c334e506af8d21c0f69115e9814a8e83ebaf395ddfa37be4293b22d0d1"
+    }
+  },
+  "config": {
+    "gateway": "0x6c533f7fE93fAE114d0954697069Df33C9B74fD7",
+    "pyth": "0x0708325268dF9F66270F1401206434524814508b",
+    "uniswapRouter": "0x2ca7d64A7EFE2D62A725E2B35Cf7230D6677FfEe",
+    "supportedTokens": {
+      "sETH.SEPOLIA": "0x05BA149A7bd6dC1F937fA9046A9e05C05f3b18b0"
+    },
+    "priceFeeds": {
+      "ETH/USD": "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace"
+    },
+    "deployment": {
+      "totalGasUsed": "12594327",
+      "totalPaid": "0.063687965530142856",
+      "averageGasPrice": "5.058110308"
+    }
+  }
+}

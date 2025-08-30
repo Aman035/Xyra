@@ -15,11 +15,11 @@ contract InterestRateManager is IInterestRateModel, BaseContract {
     uint256 private constant RAY = 1e27;
 
     // Interest model parameters
-    uint256 public baseRate;              // Base borrow rate when utilization = 0
-    uint256 public rateMultiplier;        // Slope up to optimal utilization
-    uint256 public optimalUtilization;    // Kink point
-    uint256 public jumpMultiplier;        // Slope after optimal utilization
-    uint256 public reserveFactor;         // % of interest kept as reserves (scaled by RAY)
+    uint256 public baseRate; // Base borrow rate when utilization = 0
+    uint256 public rateMultiplier; // Slope up to optimal utilization
+    uint256 public optimalUtilization; // Kink point
+    uint256 public jumpMultiplier; // Slope after optimal utilization
+    uint256 public reserveFactor; // % of interest kept as reserves (scaled by RAY)
 
     // Events
     event BaseRateUpdated(uint256 newRate);
@@ -70,13 +70,8 @@ contract InterestRateManager is IInterestRateModel, BaseContract {
         }
     }
 
-    function getSupplyRate(uint256 utilization, uint256 borrowRate) external view override returns (uint256) {
-        // Supply rate = borrowRate * utilization * (1 - reserveFactor)
-        // For simplicity, we're using 90% of the borrow rate (10% reserve factor)
-        return (borrowRate * utilization * 9) / (10 * RAY);
-    }
-
     /// ADMIN SETTERS ///
+
     function setBaseRate(uint256 newBaseRate) external onlyRiskAdmin {
         require(newBaseRate < RAY, "Base rate too high");
         baseRate = newBaseRate;

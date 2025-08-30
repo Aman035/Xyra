@@ -7,9 +7,7 @@ pragma solidity ^0.8.20;
 interface IPoolManager {
     /// @notice Creates a new lending pool for a given asset
     /// @param asset The ERC20 token address to create a pool for
-    function createVault(
-        address asset
-    ) external returns (address vaultAddr, address xTokenAddr);
+    function createVault(address asset) external returns (address vaultAddr, address xTokenAddr);
 
     /// @notice Enables or disables the use of an asset as collateral
     /// @param asset The token to configure
@@ -19,9 +17,7 @@ interface IPoolManager {
     /// @notice Returns whether a token is currently allowed as collateral
     /// @param asset The token to check
     /// @return isCollateral true if the asset can be used as collateral
-    function isCollateralEnabled(
-        address asset
-    ) external view returns (bool isCollateral);
+    function isCollateralEnabled(address asset) external view returns (bool isCollateral);
 
     /// @notice Returns the vault address for a registered asset, or address(0) if none
     function getVault(address asset) external view returns (address);
@@ -34,9 +30,7 @@ interface IPoolManager {
 
     function getLiquidityIndex(address asset) external view returns (uint256);
 
-    function getLastUpdateTimestamp(
-        address asset
-    ) external view returns (uint40);
+    function getLastUpdateTimestamp(address asset) external view returns (uint40);
 
     function setLiquidityIndex(address asset, uint256 newIndex) external;
 
