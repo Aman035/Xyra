@@ -193,6 +193,11 @@ export default function PortfolioPage() {
   }, []);
 
   const [rows, setRows] = useState<Row[]>(rowsBase);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  const DotSpin = () => (
+    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white align-middle" />
+  );
 
   // ----------------------------
   // Load on-chain data
@@ -212,6 +217,8 @@ export default function PortfolioPage() {
       if (!userIdHex) {
         return;
       }
+
+      setIsLoading(true);
 
       setRows((prev) => prev.map((r) => ({ ...r, loading: true })));
       let totalUsd = 0;
@@ -287,6 +294,7 @@ export default function PortfolioPage() {
               Number.parseFloat(formatUnits(supplyRateRay, RAY_DECIMALS)) * 100;
             const supplyApy = pctLabel(supplyApyPct);
 
+            setIsLoading(false);
             return {
               ...r,
               borrowApyPct: Number.isFinite(borrowApyPct) ? borrowApyPct : 0,
@@ -303,6 +311,7 @@ export default function PortfolioPage() {
             };
           } catch (e) {
             console.error("market row error", r.symbol, e);
+            setIsLoading(false);
             return { ...r, loading: false };
           }
         })
@@ -310,6 +319,7 @@ export default function PortfolioPage() {
 
       if (!cancelled) {
         setRows(next);
+        setIsLoading(false);
       }
     }
 
@@ -362,13 +372,15 @@ export default function PortfolioPage() {
               <DollarSignIcon className="h-4 w-4 text-blue-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">
-                ${netWorth.toFixed(2)}
-              </div>
-              {/* <p className="text-xs text-green-400 flex items-center">
-                <ArrowUpIcon className="h-3 w-3 mr-1" />
-                +5.2% this month
-              </p> */}
+              {isLoading ? (
+                <div className="text-2xl font-bold text-white">
+                  <DotSpin />{" "}
+                </div>
+              ) : (
+                <div className="text-2xl font-bold text-white">
+                  ${netWorth.toFixed(2)}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -380,9 +392,15 @@ export default function PortfolioPage() {
               <TrendingUpIcon className="h-4 w-4 text-green-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">
-                ${totalSupplyValue.toFixed(2)}
-              </div>
+              {isLoading ? (
+                <div className="text-2xl font-bold text-white">
+                  <DotSpin />{" "}
+                </div>
+              ) : (
+                <div className="text-2xl font-bold text-white">
+                  ${totalSupplyValue.toFixed(2)}
+                </div>
+              )}
               <p className="text-xs text-green-400 flex items-center">
                 <ArrowUpIcon className="h-3 w-3 mr-1" />
                 +${totalEarned.toFixed(2)} earned
@@ -398,9 +416,15 @@ export default function PortfolioPage() {
               <TrendingDownIcon className="h-4 w-4 text-red-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">
-                ${totalBorrowValue.toFixed(2)}
-              </div>
+              {isLoading ? (
+                <div className="text-2xl font-bold text-white">
+                  <DotSpin />{" "}
+                </div>
+              ) : (
+                <div className="text-2xl font-bold text-white">
+                  ${totalBorrowValue.toFixed(2)}
+                </div>
+              )}
               <p className="text-xs text-red-400 flex items-center">
                 <ArrowDownIcon className="h-3 w-3 mr-1" />
                 -${totalInterest.toFixed(2)} interest
@@ -416,17 +440,23 @@ export default function PortfolioPage() {
               <BarChart3Icon className="h-4 w-4 text-green-400" />
             </CardHeader>
             <CardContent>
-              <div
-                className={`text-2xl font-bold ${getHealthFactorColor(
-                  healthFactor
-                )}`}
-              >
-                {healthFactor == null
-                  ? "—"
-                  : healthFactor === Infinity
-                  ? "∞"
-                  : healthFactor.toFixed(2)}
-              </div>
+              {isLoading ? (
+                <div className="text-2xl font-bold text-white">
+                  <DotSpin />{" "}
+                </div>
+              ) : (
+                <div
+                  className={`text-2xl font-bold ${getHealthFactorColor(
+                    healthFactor
+                  )}`}
+                >
+                  {healthFactor == null
+                    ? "—"
+                    : healthFactor === Infinity
+                    ? "∞"
+                    : healthFactor.toFixed(2)}
+                </div>
+              )}
               <div className="text-xs text-green-400">
                 {healthFactor == null
                   ? "Connect to view"
@@ -453,75 +483,86 @@ export default function PortfolioPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {rows.map((position) =>
-                      position.supplied != "0" ? (
-                        <div
-                          key={position.zrc20}
-                          className="p-4 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
-                        >
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center space-x-3">
-                              <div className="w-10 h-10 bg-gray-900 rounded-full flex items-center justify-center">
-                                <span className="text-white font-bold text-sm">
-                                  {position.logo ? (
-                                    <Image
-                                      src={position.logo}
-                                      alt={position.name}
-                                      width={16}
-                                      height={16}
-                                    />
-                                  ) : (
-                                    <span className="text-white text-lg">
-                                      {position.symbol}
-                                    </span>
-                                  )}
-                                </span>
-                              </div>
-                              <div>
-                                <div className="text-white font-bold">
-                                  {position.symbol}
-                                </div>
-                                <div className="flex items-center space-x-1 mt-1">
-                                  <GlobeIcon className="h-3 w-3 text-cyan-400" />
-                                  <span className="text-xs text-cyan-400">
-                                    {TOTAL_ACTIVE_CHAINS} chains
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                            <Badge className="bg-green-600 text-white">
-                              {position.supplyApy}
-                            </Badge>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4 text-sm items-center">
-                            <div>
-                              <div className="text-gray-400">Supplied</div>
-                            </div>
-                            <div className="justify-self-end">
-                              <div className="text-white font-medium">
-                                {position.suppliedNum.toFixed(2)}{" "}
-                                {position.symbol}
-                              </div>
-                              <div className="text-gray-400">
-                                $ {parseFloat(position.suppliedUSD).toFixed(2)}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex space-x-2 mt-4">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-700 bg-transparent"
+                    {isLoading ? (
+                      <div className="text-2xl font-bold text-white justify-self-center">
+                        <DotSpin />{" "}
+                      </div>
+                    ) : (
+                      <>
+                        {rows.map((position) =>
+                          position.supplied != "0" ? (
+                            <div
+                              key={position.zrc20}
+                              className="p-4 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
                             >
-                              Withdraw
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div key={position.name}></div>
-                      )
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center space-x-3">
+                                  <div className="w-10 h-10 bg-gray-900 rounded-full flex items-center justify-center">
+                                    <span className="text-white font-bold text-sm">
+                                      {position.logo ? (
+                                        <Image
+                                          src={position.logo}
+                                          alt={position.name}
+                                          width={16}
+                                          height={16}
+                                        />
+                                      ) : (
+                                        <span className="text-white text-lg">
+                                          {position.symbol}
+                                        </span>
+                                      )}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <div className="text-white font-bold">
+                                      {position.symbol}
+                                    </div>
+                                    <div className="flex items-center space-x-1 mt-1">
+                                      <GlobeIcon className="h-3 w-3 text-cyan-400" />
+                                      <span className="text-xs text-cyan-400">
+                                        {TOTAL_ACTIVE_CHAINS} chains
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <Badge className="bg-green-600 text-white">
+                                  {position.supplyApy}
+                                </Badge>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4 text-sm items-center">
+                                <div>
+                                  <div className="text-gray-400">Supplied</div>
+                                </div>
+                                <div className="justify-self-end">
+                                  <div className="text-white font-medium">
+                                    {position.suppliedNum.toFixed(2)}{" "}
+                                    {position.symbol}
+                                  </div>
+                                  <div className="text-gray-400">
+                                    ${" "}
+                                    {parseFloat(position.suppliedUSD).toFixed(
+                                      2
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex space-x-2 mt-4">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-700 bg-transparent"
+                                >
+                                  Withdraw
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div key={position.name}></div>
+                          )
+                        )}
+                      </>
                     )}
                   </div>
                 </CardContent>
@@ -537,64 +578,73 @@ export default function PortfolioPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {rows.map((position) =>
-                      position.borrowed != "0" ? (
-                        <div
-                          key={position.name}
-                          className="p-4 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
-                        >
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center space-x-3">
-                              <div className="w-10 h-10 bg-gray-900 rounded-full flex items-center justify-center">
-                                <span className="text-white font-bold text-sm">
-                                  {position.logo ? (
-                                    <Image
-                                      src={position.logo}
-                                      alt={position.name}
-                                      width={16}
-                                      height={16}
-                                    />
-                                  ) : (
-                                    <span className="text-white text-lg">
-                                      {position.symbol}
+                    {isLoading ? (
+                      <div className="text-2xl font-bold text-white justify-self-center">
+                        <DotSpin />{" "}
+                      </div>
+                    ) : (
+                      <>
+                        {rows.map((position) =>
+                          position.borrowed != "0" ? (
+                            <div
+                              key={position.name}
+                              className="p-4 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
+                            >
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center space-x-3">
+                                  <div className="w-10 h-10 bg-gray-900 rounded-full flex items-center justify-center">
+                                    <span className="text-white font-bold text-sm">
+                                      {position.logo ? (
+                                        <Image
+                                          src={position.logo}
+                                          alt={position.name}
+                                          width={16}
+                                          height={16}
+                                        />
+                                      ) : (
+                                        <span className="text-white text-lg">
+                                          {position.symbol}
+                                        </span>
+                                      )}
                                     </span>
-                                  )}
-                                </span>
-                              </div>
-                              <div>
-                                <div className="text-white font-bold">
-                                  {position.symbol}
-                                </div>
-                                {/* <div className="text-gray-400 text-sm">
+                                  </div>
+                                  <div>
+                                    <div className="text-white font-bold">
+                                      {position.symbol}
+                                    </div>
+                                    {/* <div className="text-gray-400 text-sm">
                                 {position.daysActive} days active
                               </div> */}
-                                <div className="flex items-center space-x-1 mt-1">
-                                  <GlobeIcon className="h-3 w-3 text-cyan-400" />
-                                  <span className="text-xs text-cyan-400">
-                                    {TOTAL_ACTIVE_CHAINS} chains
-                                  </span>
+                                    <div className="flex items-center space-x-1 mt-1">
+                                      <GlobeIcon className="h-3 w-3 text-cyan-400" />
+                                      <span className="text-xs text-cyan-400">
+                                        {TOTAL_ACTIVE_CHAINS} chains
+                                      </span>
+                                    </div>
+                                  </div>
                                 </div>
+                                <Badge className="bg-red-600 text-white">
+                                  {position.borrowApy}
+                                </Badge>
                               </div>
-                            </div>
-                            <Badge className="bg-red-600 text-white">
-                              {position.borrowApy}
-                            </Badge>
-                          </div>
 
-                          <div className="grid grid-cols-2 gap-4 text-sm items-center">
-                            <div>
-                              <div className="text-gray-400">Borrowed</div>
-                            </div>
-                            <div className="justify-self-end">
-                              <div className="text-white font-medium">
-                                {position.borrowedNum.toFixed(2)}{" "}
-                                {position.symbol}
-                              </div>
-                              <div className="text-gray-400">
-                                $ {parseFloat(position.borrowedUSD).toFixed(2)}
-                              </div>
-                            </div>
-                            {/* <div>
+                              <div className="grid grid-cols-2 gap-4 text-sm items-center">
+                                <div>
+                                  <div className="text-gray-400">Borrowed</div>
+                                </div>
+                                <div className="justify-self-end">
+                                  <div className="text-white font-medium">
+                                    {position.borrowedNum.toFixed(2)}{" "}
+                                    {position.symbol}
+                                  </div>
+                                  <div className="text-gray-400">
+                                    ${" "}
+                                    {parseFloat(position.borrowedUSD).toFixed(
+                                      2
+                                    )}
+                                  </div>
+                                </div>
+                                {/* <div>
                             <div className="text-gray-400">Interest Owed</div>
                             <div className="text-red-400 font-medium">
                               +{position.interest} {position.asset}
@@ -603,20 +653,22 @@ export default function PortfolioPage() {
                               {position.interestValue}
                             </div>
                           </div> */}
-                          </div>
+                              </div>
 
-                          <div className="flex space-x-2 mt-4">
-                            <Button
-                              size="sm"
-                              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                            >
-                              Repay
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div key={position.name}></div>
-                      )
+                              <div className="flex space-x-2 mt-4">
+                                <Button
+                                  size="sm"
+                                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                                >
+                                  Repay
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div key={position.name}></div>
+                          )
+                        )}
+                      </>
                     )}
                   </div>
                 </CardContent>
