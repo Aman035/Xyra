@@ -9,6 +9,7 @@ import "../src/collateral/CollateralManager.sol";
 import "../src/interestRate/InterestRateManager.sol";
 import "../src/mocks/PriceOracle.sol";
 import "../src/mocks/MockToken.sol";
+import { UniversalIdentityLib as UILib } from "../src/libraries/UniversalIdentityLib.sol";
 
 contract LendingPoolTest is Test {
     uint256 public constant RAY = 1e27;
@@ -27,7 +28,14 @@ contract LendingPoolTest is Test {
     address public bob = address(0x2);
     address public charlie = address(0x3);
 
+    UILib.UniversalIdentity public aliceUID;
+    UILib.UniversalIdentity public bobUID;
+    UILib.UniversalIdentity public charlieUID;
+
     function setUp() public {
+        aliceUID = UILib.toUniversalIdentity(block.chainid, alice);
+        bobUID = UILib.toUniversalIdentity(block.chainid, bob);
+        charlieUID = UILib.toUniversalIdentity(block.chainid, charlie);
         vm.startPrank(charlie);
         // Deploy mock tokens
         usdc = new MockToken("USD Coin", "USDC", 6);
@@ -53,7 +61,9 @@ contract LendingPoolTest is Test {
             address(poolManager),
             address(interestRateModel),
             address(priceOracle),
-            address(collateralManager)
+            address(collateralManager),
+            payable(address(0)),
+            address(0)
         );
 
         poolManager.setLendingPool(address(lendingPool));
@@ -95,20 +105,8 @@ contract LendingPoolTest is Test {
         // vm.startPrank(charlie);
         priceOracle.setAssetPrice(address(usdc), 1e18);
         priceOracle.setAssetPrice(address(dai), 1e18);
-        collateralManager.setCollateralConfig(
-            address(usdc),
-            0.75e18,
-            0.85e18,
-            1e18,
-            true
-        );
-        collateralManager.setCollateralConfig(
-            address(dai),
-            0.75e18,
-            0.85e18,
-            1e18,
-            true
-        );
+        collateralManager.setCollateralConfig(address(usdc), 0.75e18, 0.85e18, 1e18, true);
+        collateralManager.setCollateralConfig(address(dai), 0.75e18, 0.85e18, 1e18, true);
         // vm.stopPrank();
         vm.stopPrank();
     }
@@ -125,27 +123,40 @@ contract LendingPoolTest is Test {
     //     vm.stopPrank();
     // }
 
-    function _supplyUSDC(address user, uint256 amount) internal {
-        vm.startPrank(user);
+    function _getAddressOfIdentity(UILib.UniversalIdentity memory user) internal returns (address) {
+        require(user.identity.length == 20, "Invalid identity length");
+        bytes memory userBytes = user.identity;
+        address to;
+        assembly {
+            to := mload(add(userBytes, 20))
+        }
+        return to;
+    }
+
+    function _supplyUSDC(UILib.UniversalIdentity memory user, uint256 amount) internal {
+        address userAddr = _getAddressOfIdentity(user);
+        vm.startPrank(userAddr);
         lendingPool.supply(address(usdc), amount, user);
         vm.stopPrank();
     }
 
-    function _supplyDAI(address user, uint256 amount) internal {
-        vm.startPrank(user);
+    function _supplyDAI(UILib.UniversalIdentity memory user, uint256 amount) internal {
+        address userAddr = _getAddressOfIdentity(user);
+        vm.startPrank(userAddr);
         lendingPool.supply(address(dai), amount, user);
         vm.stopPrank();
     }
 
-    function _borrowDAI(address user, uint256 amount) internal {
-        vm.startPrank(user);
+    function _borrowDAI(UILib.UniversalIdentity memory user, uint256 amount) internal {
+        address userAddr = _getAddressOfIdentity(user);
+        vm.startPrank(userAddr);
         lendingPool.borrow(address(dai), amount, user);
         vm.stopPrank();
     }
 
     function _setupAliceUSDCandBobDAI() internal {
-        _supplyUSDC(alice, 1000 * 1e6);
-        _supplyDAI(bob, 1000 * 1e18);
+        _supplyUSDC(aliceUID, 1000 * 1e6);
+        _supplyDAI(bobUID, 1000 * 1e18);
 
         vm.startPrank(charlie);
         priceOracle.setAssetPrice(address(usdc), 1e18);
@@ -163,10 +174,10 @@ contract LendingPoolTest is Test {
         assertEq(usdc.balanceOf(alice), 10000 * 1e6);
 
         // Supply USDC
-        _supplyUSDC(alice, supplyAmount);
+        _supplyUSDC(aliceUID, supplyAmount);
 
         // Supply USDC
-        _supplyUSDC(bob, supplyAmount);
+        _supplyUSDC(bobUID, supplyAmount);
     }
 
     function testWithdraw() public {
@@ -178,7 +189,7 @@ contract LendingPoolTest is Test {
 
         // Then withdraw half
         vm.startPrank(alice);
-        lendingPool.withdraw(address(usdc), withdrawAmount, alice);
+        lendingPool.withdraw(address(usdc), withdrawAmount, aliceUID);
         vm.stopPrank();
 
         // Check final balances
@@ -205,22 +216,22 @@ contract LendingPoolTest is Test {
 
         // Borrow against collateral
         vm.startPrank(alice);
-        lendingPool.borrow(asset, borrowAmount, alice);
+        lendingPool.borrow(asset, borrowAmount, aliceUID);
         vm.stopPrank();
 
         uint256 aliceBorrowAssetBalanceAfter = usdc.balanceOf(alice);
 
         assertEq(aliceBorrowAssetBalanceAfter, aliceBorrowAssetBalanceBefore + borrowAmount);
-        assertEq(lendingPool.getUserTotalDebt(alice), borrowAmount * 1e12); // scaled to 18 decimals
+        assertEq(lendingPool.getUserTotalDebt(UILib.computeUserId(aliceUID)), borrowAmount * 1e12); // scaled to 18 decimals
 
         // Repay half
         vm.startPrank(alice);
-        lendingPool.repay(asset, repayAmount, alice);
+        lendingPool.repay(asset, repayAmount, aliceUID);
         vm.stopPrank();
 
         // Check updated debt
         uint256 expectedDebt = (borrowAmount - repayAmount) * 1e12;
-        assertEq(lendingPool.getUserTotalDebt(alice), expectedDebt);
+        assertEq(lendingPool.getUserTotalDebt(UILib.computeUserId(aliceUID)), expectedDebt);
     }
 
     function testWithdrawFailsDueToHealthFactor() public {
@@ -237,13 +248,13 @@ contract LendingPoolTest is Test {
 
         // Borrow 700 USDC
         vm.startPrank(alice);
-        lendingPool.borrow(asset, borrowAmount, alice);
+        lendingPool.borrow(asset, borrowAmount, aliceUID);
         vm.stopPrank();
 
         // Attempt to withdraw 500 USDC (should fail because it would drop HF < 1)
         vm.startPrank(alice);
         vm.expectRevert("LendingPool: withdraw would lower health factor");
-        lendingPool.withdraw(asset, 500 * 1e6, alice);
+        lendingPool.withdraw(asset, 500 * 1e6, aliceUID);
         vm.stopPrank();
     }
 
@@ -261,10 +272,10 @@ contract LendingPoolTest is Test {
         vm.stopPrank();
 
         vm.startPrank(alice);
-        lendingPool.borrow(asset, borrowAmount, alice);
-        lendingPool.repay(asset, repayAmount, alice);
+        lendingPool.borrow(asset, borrowAmount, aliceUID);
+        lendingPool.repay(asset, repayAmount, aliceUID);
         uint256 aliceAssetBalanceBeforeWithdraw = usdc.balanceOf(alice);
-        lendingPool.withdraw(asset, 500 * 1e6, alice);
+        lendingPool.withdraw(asset, 500 * 1e6, aliceUID);
         vm.stopPrank();
 
         uint256 aliceAssetBalanceAfterWithdraw = usdc.balanceOf(alice);
@@ -288,7 +299,7 @@ contract LendingPoolTest is Test {
 
         vm.startPrank(alice);
         vm.expectRevert("LendingPool: borrow exceeds LTV");
-        lendingPool.borrow(asset, borrowAmount, alice);
+        lendingPool.borrow(asset, borrowAmount, aliceUID);
         vm.stopPrank();
     }
 
@@ -305,7 +316,7 @@ contract LendingPoolTest is Test {
         vm.stopPrank();
 
         vm.startPrank(alice);
-        lendingPool.borrow(asset, borrowAmount, alice); // Should succeed
+        lendingPool.borrow(asset, borrowAmount, aliceUID); // Should succeed
         vm.stopPrank();
     }
 
@@ -320,13 +331,13 @@ contract LendingPoolTest is Test {
 
         // Borrow 740 USDC (just under 75%)
         vm.startPrank(alice);
-        lendingPool.borrow(asset, 740 * 1e6, alice);
+        lendingPool.borrow(asset, 740 * 1e6, aliceUID);
         vm.stopPrank();
 
         // Try to withdraw 200 USDC → should drop health factor below 1
         vm.startPrank(alice);
         vm.expectRevert("LendingPool: withdraw would lower health factor");
-        lendingPool.withdraw(asset, 200 * 1e6, alice);
+        lendingPool.withdraw(asset, 200 * 1e6, aliceUID);
         vm.stopPrank();
     }
 
@@ -341,18 +352,18 @@ contract LendingPoolTest is Test {
 
         // Borrow 600 USDC
         vm.startPrank(alice);
-        lendingPool.borrow(asset, 600 * 1e6, alice);
+        lendingPool.borrow(asset, 600 * 1e6, aliceUID);
         vm.stopPrank();
 
         // Withdraw 200 USDC → keeps HF slightly above 1
         vm.startPrank(alice);
-        lendingPool.withdraw(asset, 200 * 1e6, alice);
+        lendingPool.withdraw(asset, 200 * 1e6, aliceUID);
         vm.stopPrank();
     }
 
     function testAliceSuppliesUSDC_BobSuppliesDAI() public {
-        _supplyUSDC(alice, 1000 * 1e6);
-        _supplyDAI(bob, 1000 * 1e18);
+        _supplyUSDC(aliceUID, 1000 * 1e6);
+        _supplyDAI(bobUID, 1000 * 1e18);
 
         assertEq(usdc.balanceOf(alice), 9000 * 1e6);
         assertEq(dai.balanceOf(bob), 9000 * 1e18);
@@ -365,10 +376,10 @@ contract LendingPoolTest is Test {
 
         // Alice borrows DAI against USDC collateral
         uint256 borrowAmount = 400 * 1e18;
-        _borrowDAI(alice, borrowAmount);
+        _borrowDAI(aliceUID, borrowAmount);
 
         assertEq(dai.balanceOf(alice), aliceDaiBalanceBeforeWithdraw + borrowAmount);
-        uint256 aliceDebt = lendingPool.getUserTotalDebt(alice);
+        uint256 aliceDebt = lendingPool.getUserTotalDebt(UILib.computeUserId(aliceUID));
         assertGt(aliceDebt, 0);
     }
 
@@ -377,22 +388,22 @@ contract LendingPoolTest is Test {
 
         // Alice borrows DAI
         uint256 borrowAmount = 400 * 1e18;
-        _borrowDAI(alice, borrowAmount);
+        _borrowDAI(aliceUID, borrowAmount);
 
         // Alice repays part of DAI
         uint256 repayAmount = 150 * 1e18;
         dai.approve(address(lendingPool), repayAmount);
         vm.startPrank(alice);
-        lendingPool.repay(address(dai), repayAmount, alice);
+        lendingPool.repay(address(dai), repayAmount, aliceUID);
         vm.stopPrank();
 
-        uint256 remainingDebt = lendingPool.getUserTotalDebt(alice);
+        uint256 remainingDebt = lendingPool.getUserTotalDebt(UILib.computeUserId(aliceUID));
         assertLt(remainingDebt, borrowAmount);
 
         // Alice withdraws part of USDC collateral
         uint256 withdrawAmount = 200 * 1e6;
         vm.startPrank(alice);
-        lendingPool.withdraw(address(usdc), withdrawAmount, alice);
+        lendingPool.withdraw(address(usdc), withdrawAmount, aliceUID);
         vm.stopPrank();
 
         assertEq(usdc.balanceOf(alice), 10000 * 1e6 - 1000 * 1e6 + withdrawAmount); // started with 10000, supplied 1000, withdrew 200
@@ -405,17 +416,17 @@ contract LendingPoolTest is Test {
         uint256 daiBorrowAmount = 700 * 1e18; // 70% of collateral
 
         vm.startPrank(alice);
-        lendingPool.borrow(address(dai), daiBorrowAmount, alice);
+        lendingPool.borrow(address(dai), daiBorrowAmount, aliceUID);
         vm.stopPrank();
 
         // Check DAI balance increased
         assertEq(dai.balanceOf(alice), aliceDaiBalanceBeforeWithdraw + daiBorrowAmount);
 
         // Check debt accounting (scaled to 18 decimals)
-        assertEq(lendingPool.getUserTotalDebt(alice), daiBorrowAmount);
+        assertEq(lendingPool.getUserTotalDebt(UILib.computeUserId(aliceUID)), daiBorrowAmount);
 
         // Health factor should be >= 1 since borrow <= LTV
-        uint256 hf = lendingPool.getHealthFactor(alice);
+        uint256 hf = lendingPool.getHealthFactor(UILib.computeUserId(aliceUID));
         assertGe(hf, 1e18);
     }
 
@@ -426,7 +437,7 @@ contract LendingPoolTest is Test {
 
         vm.startPrank(alice);
         vm.expectRevert("LendingPool: borrow exceeds LTV");
-        lendingPool.borrow(address(dai), daiBorrowAmount, alice);
+        lendingPool.borrow(address(dai), daiBorrowAmount, aliceUID);
         vm.stopPrank();
     }
 
@@ -436,7 +447,7 @@ contract LendingPoolTest is Test {
         uint256 daiBorrowAmount = 700 * 1e18;
 
         vm.startPrank(alice);
-        lendingPool.borrow(address(dai), daiBorrowAmount, alice);
+        lendingPool.borrow(address(dai), daiBorrowAmount, aliceUID);
         vm.stopPrank();
 
         uint256 repayAmount = 300 * 1e18;
@@ -444,11 +455,11 @@ contract LendingPoolTest is Test {
         // Alice approves DAI to lendingPool for repayment
         vm.startPrank(alice);
         dai.approve(address(lendingPool), repayAmount);
-        lendingPool.repay(address(dai), repayAmount, alice);
+        lendingPool.repay(address(dai), repayAmount, aliceUID);
         vm.stopPrank();
 
         uint256 expectedDebt = daiBorrowAmount - repayAmount;
-        assertEq(lendingPool.getUserTotalDebt(alice), expectedDebt);
+        assertEq(lendingPool.getUserTotalDebt(UILib.computeUserId(aliceUID)), expectedDebt);
     }
 
     function testAliceWithdrawUSDCCollateralMaintainsHealthFactor() public {
@@ -456,18 +467,18 @@ contract LendingPoolTest is Test {
 
         uint256 daiBorrowAmount = 700 * 1e18;
         vm.startPrank(alice);
-        lendingPool.borrow(address(dai), daiBorrowAmount, alice);
+        lendingPool.borrow(address(dai), daiBorrowAmount, aliceUID);
         vm.stopPrank();
 
         // Alice tries to withdraw 150 USDC
         uint256 withdrawAmount = 150 * 1e6;
 
         vm.startPrank(alice);
-        lendingPool.withdraw(address(usdc), withdrawAmount, alice);
+        lendingPool.withdraw(address(usdc), withdrawAmount, aliceUID);
         vm.stopPrank();
 
         // Health factor still above 1
-        uint256 hf = lendingPool.getHealthFactor(alice);
+        uint256 hf = lendingPool.getHealthFactor(UILib.computeUserId(aliceUID));
         assertGe(hf, 1e18);
     }
 
@@ -476,7 +487,7 @@ contract LendingPoolTest is Test {
 
         uint256 daiBorrowAmount = 700 * 1e18;
         vm.startPrank(alice);
-        lendingPool.borrow(address(dai), daiBorrowAmount, alice);
+        lendingPool.borrow(address(dai), daiBorrowAmount, aliceUID);
         vm.stopPrank();
 
         // Withdraw amount too large
@@ -484,7 +495,7 @@ contract LendingPoolTest is Test {
 
         vm.startPrank(alice);
         vm.expectRevert("LendingPool: withdraw would lower health factor");
-        lendingPool.withdraw(address(usdc), withdrawAmount, alice);
+        lendingPool.withdraw(address(usdc), withdrawAmount, aliceUID);
         vm.stopPrank();
     }
 
@@ -495,14 +506,14 @@ contract LendingPoolTest is Test {
 
         // Alice supplies USDC at block.timestamp = 0
         vm.startPrank(alice);
-        lendingPool.supply(address(usdc), supplyAmount, alice);
+        lendingPool.supply(address(usdc), supplyAmount, aliceUID);
         vm.stopPrank();
 
         // Bob mints and supplies USDC as collateral
         vm.startPrank(bob);
         usdc.mint(bob, 2_000e6); // Mint 2000 USDC to Bob
         usdc.approve(address(lendingPool), type(uint256).max);
-        lendingPool.supply(address(usdc), 1_000e6, bob); // Bob supplies 1000 USDC collateral
+        lendingPool.supply(address(usdc), 1_000e6, bobUID); // Bob supplies 1000 USDC collateral
         vm.stopPrank();
 
         // Initial liquidity index for USDC should be 1e27 (RAY)
@@ -510,27 +521,19 @@ contract LendingPoolTest is Test {
         assertEq(initialIndex, RAY);
 
         // Log initial borrow and supply rates
-        uint256 borrowRateBefore = lendingPool.getCurrentBorrowRate(
-            address(usdc)
-        );
-        uint256 supplyRateBefore = lendingPool.getCurrentSupplyRate(
-            address(usdc)
-        );
+        uint256 borrowRateBefore = lendingPool.getCurrentBorrowRate(address(usdc));
+        uint256 supplyRateBefore = lendingPool.getCurrentSupplyRate(address(usdc));
         console.log("Initial borrow rate (ray):", borrowRateBefore);
         console.log("Initial supply rate (ray):", supplyRateBefore);
 
         // Bob borrows 500 USDC at the same block (timestamp 0)
         vm.startPrank(bob);
-        lendingPool.borrow(address(usdc), borrowAmount, bob);
+        lendingPool.borrow(address(usdc), borrowAmount, bobUID);
         vm.stopPrank();
 
         // Check rates after borrow
-        uint256 borrowRateAfterBorrow = lendingPool.getCurrentBorrowRate(
-            address(usdc)
-        );
-        uint256 supplyRateAfterBorrow = lendingPool.getCurrentSupplyRate(
-            address(usdc)
-        );
+        uint256 borrowRateAfterBorrow = lendingPool.getCurrentBorrowRate(address(usdc));
+        uint256 supplyRateAfterBorrow = lendingPool.getCurrentSupplyRate(address(usdc));
         console.log("Borrow rate after borrow (ray):", borrowRateAfterBorrow);
         console.log("Supply rate after borrow (ray):", supplyRateAfterBorrow);
 
@@ -543,22 +546,15 @@ contract LendingPoolTest is Test {
 
         // Manually trigger updateLiquidityIndex by doing a supply
         vm.startPrank(alice);
-        lendingPool.supply(address(usdc), 1e6, alice); // small supply to trigger update
+        lendingPool.supply(address(usdc), 1e6, aliceUID); // small supply to trigger update
         vm.stopPrank();
 
         uint256 updatedIndex = poolManager.getLiquidityIndex(address(usdc));
-        assertTrue(
-            updatedIndex > initialIndex,
-            "Liquidity index should increase over time"
-        );
+        assertTrue(updatedIndex > initialIndex, "Liquidity index should increase over time");
 
         // Check rates after 1 day and index update
-        uint256 borrowRateAfterTime = lendingPool.getCurrentBorrowRate(
-            address(usdc)
-        );
-        uint256 supplyRateAfterTime = lendingPool.getCurrentSupplyRate(
-            address(usdc)
-        );
+        uint256 borrowRateAfterTime = lendingPool.getCurrentBorrowRate(address(usdc));
+        uint256 supplyRateAfterTime = lendingPool.getCurrentSupplyRate(address(usdc));
         console.log("Borrow rate after time (ray):", borrowRateAfterTime);
         console.log("Supply rate after time (ray):", supplyRateAfterTime);
 
@@ -570,22 +566,14 @@ contract LendingPoolTest is Test {
         vm.startPrank(bob);
         usdc.mint(bob, partialRepay); // Mint 100 USDC for Bob to repay
         usdc.approve(address(lendingPool), partialRepay);
-        uint256 actualRepaid = lendingPool.repay(
-            address(usdc),
-            partialRepay,
-            bob
-        );
+        uint256 actualRepaid = lendingPool.repay(address(usdc), partialRepay, bobUID);
         vm.stopPrank();
 
         assertGt(actualRepaid, 0);
 
         // Check rates after repay
-        uint256 borrowRateAfterRepay = lendingPool.getCurrentBorrowRate(
-            address(usdc)
-        );
-        uint256 supplyRateAfterRepay = lendingPool.getCurrentSupplyRate(
-            address(usdc)
-        );
+        uint256 borrowRateAfterRepay = lendingPool.getCurrentBorrowRate(address(usdc));
+        uint256 supplyRateAfterRepay = lendingPool.getCurrentSupplyRate(address(usdc));
         console.log("Borrow rate after repay (ray):", borrowRateAfterRepay);
         console.log("Supply rate after repay (ray):", supplyRateAfterRepay);
 
@@ -600,16 +588,16 @@ contract LendingPoolTest is Test {
 
         // Both Alice and Bob supply before borrowing
         vm.startPrank(alice);
-        lendingPool.supply(address(usdc), aliceSupplyAmount, alice);
+        lendingPool.supply(address(usdc), aliceSupplyAmount, aliceUID);
         vm.stopPrank();
 
         vm.startPrank(bob);
-        lendingPool.supply(address(usdc), bobSupplyAmount, bob);
+        lendingPool.supply(address(usdc), bobSupplyAmount, bobUID);
         vm.stopPrank();
 
         // Bob borrows 1,000 USDC at block 0
         vm.startPrank(bob);
-        lendingPool.borrow(address(usdc), 1_000e6, bob);
+        lendingPool.borrow(address(usdc), 1_000e6, bobUID);
         vm.stopPrank();
 
         // Advance time 12 hours
@@ -619,60 +607,47 @@ contract LendingPoolTest is Test {
         vm.startPrank(bob);
         usdc.mint(bob, 500e6);
         usdc.approve(address(lendingPool), 500e6);
-        lendingPool.repay(address(usdc), 500e6, bob);
+        lendingPool.repay(address(usdc), 500e6, bobUID);
         vm.stopPrank();
 
         // Bob's debt after partial repay (should be > 0)
-        uint256 debtAfterPartialRepay = lendingPool.getUserTotalDebt(bob);
+        uint256 debtAfterPartialRepay = lendingPool.getUserTotalDebt(UILib.computeUserId(bobUID));
         assertGt(debtAfterPartialRepay, 0);
 
         // Advance time 12 hours more
         vm.warp(block.timestamp + 12000000 hours);
 
         // Bob repays rest of debt (mint more than owed to be safe)
-        uint256 remainingDebt = lendingPool.getUserTotalDebt(bob);
+        uint256 remainingDebt = lendingPool.getUserTotalDebt(UILib.computeUserId(bobUID));
         uint256 repayAmount = remainingDebt / 1e12 + 100e6; // extra 100 USDC for safety
 
         vm.startPrank(bob);
         usdc.mint(bob, repayAmount);
         usdc.approve(address(lendingPool), repayAmount);
-        uint256 actualRepaid = lendingPool.repay(
-            address(usdc),
-            repayAmount,
-            bob
-        );
+        uint256 actualRepaid = lendingPool.repay(address(usdc), repayAmount, bobUID);
         vm.stopPrank();
 
         // Check how much Alice can withdraw now based on shares and liquidity index
-        uint256 maxWithdrawable = lendingPool.getMaxWithdrawableByShares(
-            alice,
-            address(usdc)
-        );
+        uint256 maxWithdrawable = lendingPool.getMaxWithdrawableByShares(UILib.computeUserId(aliceUID), address(usdc));
         assertGe(maxWithdrawable, aliceSupplyAmount - 5);
 
         // Now Alice withdraws all max withdrawable amount
         vm.startPrank(alice);
         uint256 aliceBalanceBeforeWithdraw = usdc.balanceOf(alice);
 
-        uint256 withdrawnAmount = lendingPool.withdraw(
-            address(usdc),
-            maxWithdrawable,
-            alice
-        );
+        uint256 withdrawnAmount = lendingPool.withdraw(address(usdc), maxWithdrawable, aliceUID);
 
         uint256 aliceBalanceAfterWithdraw = usdc.balanceOf(alice);
         vm.stopPrank();
 
         // Alice should receive at least what she supplied, likely more due to interest earned
         assertGe(withdrawnAmount, aliceSupplyAmount - 1);
-        assertGe(
-            aliceBalanceAfterWithdraw,
-            aliceBalanceBeforeWithdraw + withdrawnAmount
-        );
+        assertGe(aliceBalanceAfterWithdraw, aliceBalanceBeforeWithdraw + withdrawnAmount);
 
         // Also check total repaid by Bob is more than principal due to interest
         assertGt(actualRepaid, 500e6); // Bob borrowed 1,000 but repaid more due to interest
     }
+
     function testInterestAccrualOverTime() public {
         uint256 supplyAmountAlice = 1000e6;
         uint256 supplyAmountBob = 1000e6;
@@ -680,17 +655,17 @@ contract LendingPoolTest is Test {
 
         // Alice supplies USDC as collateral
         vm.startPrank(alice);
-        lendingPool.supply(address(usdc), supplyAmountAlice, alice);
+        lendingPool.supply(address(usdc), supplyAmountAlice, aliceUID);
         vm.stopPrank();
 
         // Mint and approve Bob's tokens so he can supply collateral
         usdc.mint(bob, supplyAmountBob);
         vm.startPrank(bob);
         usdc.approve(address(lendingPool), supplyAmountBob);
-        lendingPool.supply(address(usdc), supplyAmountBob, bob);
+        lendingPool.supply(address(usdc), supplyAmountBob, bobUID);
 
         // Bob borrows some USDC
-        lendingPool.borrow(address(usdc), borrowAmountBob, bob);
+        lendingPool.borrow(address(usdc), borrowAmountBob, bobUID);
         vm.stopPrank();
 
         // Fast forward 1 day
@@ -698,14 +673,11 @@ contract LendingPoolTest is Test {
 
         // Trigger liquidity index update by a small supply from Alice
         vm.startPrank(alice);
-        lendingPool.supply(address(usdc), 1e6, alice);
+        lendingPool.supply(address(usdc), 1e6, aliceUID);
         vm.stopPrank();
 
         uint256 updatedIndex = poolManager.getLiquidityIndex(address(usdc));
-        assertTrue(
-            updatedIndex > 1e27,
-            "Liquidity index should have increased due to interest"
-        );
+        assertTrue(updatedIndex > 1e27, "Liquidity index should have increased due to interest");
     }
 
     function testInterestPortionOnPartialRepay() public {
@@ -715,14 +687,14 @@ contract LendingPoolTest is Test {
         uint256 partialRepay = 2_000e6;
 
         vm.startPrank(alice);
-        lendingPool.supply(address(usdc), supplyAmountAlice, alice);
+        lendingPool.supply(address(usdc), supplyAmountAlice, aliceUID);
         vm.stopPrank();
 
         usdc.mint(bob, supplyAmountBob);
         vm.startPrank(bob);
         usdc.approve(address(lendingPool), supplyAmountBob);
-        lendingPool.supply(address(usdc), supplyAmountBob, bob);
-        lendingPool.borrow(address(usdc), borrowAmountBob, bob);
+        lendingPool.supply(address(usdc), supplyAmountBob, bobUID);
+        lendingPool.borrow(address(usdc), borrowAmountBob, bobUID);
         vm.stopPrank();
 
         vm.warp(block.timestamp + 12 hours);
@@ -731,7 +703,7 @@ contract LendingPoolTest is Test {
         usdc.mint(bob, partialRepay);
         vm.startPrank(bob);
         usdc.approve(address(lendingPool), partialRepay);
-        uint256 repaid = lendingPool.repay(address(usdc), partialRepay, bob);
+        uint256 repaid = lendingPool.repay(address(usdc), partialRepay, bobUID);
         vm.stopPrank();
 
         assertGt(repaid, 0, "Partial repay should be successful");
@@ -742,14 +714,14 @@ contract LendingPoolTest is Test {
         uint256 supplyAmountBob = 1000e6;
 
         vm.startPrank(alice);
-        lendingPool.supply(address(usdc), supplyAmountAlice, alice);
+        lendingPool.supply(address(usdc), supplyAmountAlice, aliceUID);
         vm.stopPrank();
 
         usdc.mint(bob, supplyAmountBob);
         vm.startPrank(bob);
         usdc.approve(address(lendingPool), supplyAmountBob);
-        lendingPool.supply(address(usdc), supplyAmountBob, bob);
-        lendingPool.borrow(address(usdc), 300e6, bob);
+        lendingPool.supply(address(usdc), supplyAmountBob, bobUID);
+        lendingPool.borrow(address(usdc), 300e6, bobUID);
         vm.stopPrank();
 
         vm.warp(block.timestamp + 1 days);
@@ -757,8 +729,8 @@ contract LendingPoolTest is Test {
         usdc.mint(bob, 1_500e6);
         vm.startPrank(bob);
         usdc.approve(address(lendingPool), 150e6);
-        lendingPool.repay(address(usdc), 150e6, bob);
-        lendingPool.borrow(address(usdc), 200e6, bob);
+        lendingPool.repay(address(usdc), 150e6, bobUID);
+        lendingPool.borrow(address(usdc), 200e6, bobUID);
         vm.stopPrank();
 
         vm.warp(block.timestamp + 1 days);
@@ -766,16 +738,12 @@ contract LendingPoolTest is Test {
         usdc.mint(bob, 3_000e6);
         vm.startPrank(bob);
         usdc.approve(address(lendingPool), 300e6);
-        lendingPool.repay(address(usdc), 300e6, bob);
+        lendingPool.repay(address(usdc), 300e6, bobUID);
         vm.stopPrank();
 
         // Check Bob's debt is reduced appropriately
-        uint256 debtAfter = lendingPool.getUserTotalDebt(bob);
-        assertLt(
-            debtAfter,
-            300e18,
-            "Bob's debt should be less after partial repays"
-        );
+        uint256 debtAfter = lendingPool.getUserTotalDebt(UILib.computeUserId(bobUID));
+        assertLt(debtAfter, 300e18, "Bob's debt should be less after partial repays");
     }
 
     function testRatesChangeOverTime() public {
@@ -784,56 +752,32 @@ contract LendingPoolTest is Test {
         uint256 borrowAmountBob = 5_00e6;
 
         vm.startPrank(alice);
-        lendingPool.supply(address(usdc), supplyAmountAlice, alice);
+        lendingPool.supply(address(usdc), supplyAmountAlice, aliceUID);
         vm.stopPrank();
 
         usdc.mint(bob, supplyAmountBob);
         vm.startPrank(bob);
         usdc.approve(address(lendingPool), supplyAmountBob);
-        lendingPool.supply(address(usdc), supplyAmountBob, bob);
-        lendingPool.borrow(address(usdc), borrowAmountBob, bob);
+        lendingPool.supply(address(usdc), supplyAmountBob, bobUID);
+        lendingPool.borrow(address(usdc), borrowAmountBob, bobUID);
         vm.stopPrank();
 
-        uint256 borrowRateBefore = lendingPool.getCurrentBorrowRate(
-            address(usdc)
-        );
-        uint256 supplyRateBefore = lendingPool.getCurrentSupplyRate(
-            address(usdc)
-        );
+        uint256 borrowRateBefore = lendingPool.getCurrentBorrowRate(address(usdc));
+        uint256 supplyRateBefore = lendingPool.getCurrentSupplyRate(address(usdc));
 
-        assertGt(
-            borrowRateBefore,
-            0,
-            "Borrow rate should be positive after borrow"
-        );
-        assertGt(
-            supplyRateBefore,
-            0,
-            "Supply rate should be positive after borrow"
-        );
+        assertGt(borrowRateBefore, 0, "Borrow rate should be positive after borrow");
+        assertGt(supplyRateBefore, 0, "Supply rate should be positive after borrow");
 
         vm.warp(block.timestamp + 1 days);
 
         vm.startPrank(alice);
-        lendingPool.supply(address(usdc), 1e6, alice); // trigger update
+        lendingPool.supply(address(usdc), 1e6, aliceUID); // trigger update
         vm.stopPrank();
 
-        uint256 borrowRateAfter = lendingPool.getCurrentBorrowRate(
-            address(usdc)
-        );
-        uint256 supplyRateAfter = lendingPool.getCurrentSupplyRate(
-            address(usdc)
-        );
+        uint256 borrowRateAfter = lendingPool.getCurrentBorrowRate(address(usdc));
+        uint256 supplyRateAfter = lendingPool.getCurrentSupplyRate(address(usdc));
 
-        assertLe(
-            borrowRateAfter,
-            borrowRateBefore,
-            "Borrow rate should decrease or stay same over time"
-        );
-        assertLe(
-            supplyRateAfter,
-            supplyRateBefore,
-            "Supply rate should decrease or stay same over time"
-        );
+        assertLe(borrowRateAfter, borrowRateBefore, "Borrow rate should decrease or stay same over time");
+        assertLe(supplyRateAfter, supplyRateBefore, "Supply rate should decrease or stay same over time");
     }
 }
