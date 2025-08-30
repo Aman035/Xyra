@@ -21,6 +21,9 @@ contract PoolManager is IPoolManager, BaseContract {
     /// @dev Mapping of asset to corresponding xERC20 token
     mapping(address => address) public assetToXToken;
 
+    /// @dev Mapping of deployed vault reserve address to its asset address
+    mapping(address => address) public vaultToAsset;
+
     /// @dev List of all registered assets
     address[] public allAssets;
 
@@ -56,6 +59,7 @@ contract PoolManager is IPoolManager, BaseContract {
         // Register vault and xERC20 token
         assetToVault[asset] = vaultAddr;
         assetToXToken[asset] = xTokenAddr;
+        vaultToAsset[vaultAddr] = asset;
         allAssets.push(asset);
 
         emit PoolCreated(asset, vaultAddr, xTokenAddr);
