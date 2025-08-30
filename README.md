@@ -1,15 +1,19 @@
-# Xyra.Fi
+# Xyra
 
-**Xyra.Fi** is a **universal cross-chain lending protocol** built on [ZetaChain](https://www.zetachain.com/).
+**Xyra** is a **universal cross-chain lending protocol** built on [ZetaChain](https://www.zetachain.com/).
 It unifies liquidity across multiple blockchains, enabling seamless supply, borrow, repay, and withdraw actions from any chain to any chain.
 
 ---
 
 ## 🌐 Overview
 
-### Why Xyra.Fi?
+### Why Xyra?
 
 Traditional lending protocols are siloed per chain - liquidity on Ethereum, Solana, or Base cannot easily interact. Xyra.Fi leverages ZetaChain’s **universal smart contracts** to unify liquidity, letting users supply and borrow across chains without bridging or manual swaps.
+![Home](./docs/home.png)
+![Supply](./docs/supply.png)
+![Borrow](./docs/borrow.png)
+![Portfolio](./docs/portfolio.png)
 
 ---
 
@@ -66,6 +70,108 @@ Xyra/
 - **Repay Flexibly**
 
   - Repay borrowed positions from **any chain**, **any asset**, and even **on behalf of another address**.
+
+---
+
+## How It Works
+
+### Supply
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User Wallet (External Chain)
+    participant ASSET as Source Asset (ERC20/SPL)
+    participant GW as External Gateway (EVM/Solana)
+    participant LP as LendingPool (ZetaChain • Universal)
+    participant DEX as DEX/Aggregator (Zeta)
+    participant VAULT as Target Vault (ERC4626Reserve on Zeta)
+    participant ID as UniversalIdentityLib
+    participant IR as InterestRateManager
+    participant OR as PriceOracle
+    participant CM as CollateralManager
+
+    Note over U,GW: Params: fromChain, fromAsset, amount,<br/>toVault (ETH/SOL/USDC...), onBehalfOf(Chain, Address)
+    Note over VAULT: Vault asset = vault ZRC20 (e.g., ETH/SOL/USDC as ZRC20)
+
+    rect rgb(245,245,245)
+      Note over ASSET: (EVM) ERC20 approve may be required
+      U->>ASSET: (1) approve()  ⟵ if ERC20
+    end
+
+
+    U->>GW: (2) depositAndCall(supply,fromAsset, toVault, amount, onBehalfOf(Chain, Address))
+
+    GW-->>LP: (3) CCTX to ZetaChain + credit incoming ZRC20 equivalent
+
+    LP->>ID: (4) map(onBehalfOf) → universal identity
+    LP-->>LP: (5) validate params & basic health checks
+
+    alt fromAsset (ZRC20) ≠ vaultAsset (ZRC20)
+      LP->>DEX: (6) swap fromAsset.ZRC20 → vaultAsset.ZRC20
+      DEX-->>LP: (7) receive vaultAsset.ZRC20
+    else already correct asset
+      LP-->>LP: (6) skip swap
+    end
+
+    LP->>VAULT: (8) deposit(vaultAsset.ZRC20, amount)
+    VAULT-->>LP: (9) mint xERC20 to onBehalfOf
+
+    par Post-accounting
+      LP->>IR: (10) update utilization/interest
+      LP->>OR: (11) record spot/price snapshot
+      LP->>CM: (12) refresh collateral/LTV state
+    end
+
+    LP-->>U: (13) success: xERC20 credited to onBehalfOf (cross-chain supply finalized)
+
+```
+
+## Borrow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User Wallet (External Chain)
+    participant GW as External Gateway (EVM/Solana)
+    participant LP as LendingPool (ZetaChain • Universal)
+    participant VAULT as Source Vault (ERC4626Reserve on Zeta)
+    participant DEX as DEX/Aggregator (Zeta)
+    participant IR as InterestRateManager
+    participant OR as PriceOracle
+    participant CM as CollateralManager
+    participant OUT as Outbound Gateway (to Target Chain)
+
+    Note over U,GW: Params: fromChain, fromVault, amount, borrowAsset, deliverTo(Chain, Address)
+    Note over VAULT: Vault asset = vault ZRC20 (e.g., ETH/SOL/USDC as ZRC20)
+
+    U->>GW: (1) call(borrow, fromVault, amount, borrowAsset, deliverTo)
+
+    GW-->>LP: (2) CCTX delivery to LendingPool (Zeta)
+
+    LP-->>LP: (3) validate collateral & health factor, max borrowable
+
+    LP->>VAULT: (4) withdraw/redeem(vaultAsset.ZRC20, amount)
+    VAULT-->>LP: (5) send vaultAsset.ZRC20 to LP
+
+    alt borrowAsset (ZRC20) ≠ vaultAsset (ZRC20)
+      LP->>DEX: (6) swap vaultAsset.ZRC20 → borrowAsset.ZRC20
+      DEX-->>LP: (7) receive borrowAsset.ZRC20
+    else already correct asset
+      LP-->>LP: (6) skip swap
+    end
+
+    LP->>OUT: (8) outbound transfer to deliverTo(Chain, Address)
+    OUT-->>U: (9) asset delivered on target chain/address
+
+    par Post-accounting
+      LP->>IR: (10) accrue interest & update utilization
+      LP->>OR: (11) record price snapshot for health checks
+      LP->>CM: (12) update borrower debt & health factor
+    end
+
+    LP-->>U: (13) success: borrow finalized, debt recorded
+```
 
 ---
 
