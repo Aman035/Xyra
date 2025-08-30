@@ -255,7 +255,7 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="text-2xl font-bold text-white font-serif">
-                  {tvlUsd.toFixed(2)}
+                  ${tvlUsd.toFixed(2)}
                 </div>
               )}
             <p className="text-xs text-green-400">
