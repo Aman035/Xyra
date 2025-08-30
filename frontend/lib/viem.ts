@@ -2,7 +2,7 @@
 import { createPublicClient, http, type Abi, type WalletClient } from 'viem'
 import { LENDING_POOL_ABI } from './abis'
 
-type HexAddr = `0x${string}`
+export type HexAddr = `0x${string}`
 
 type ReadArgs = {
   rpcUrl?: string

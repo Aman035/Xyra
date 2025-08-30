@@ -25,8 +25,8 @@ import { borrow } from '@/lib/lendingPool'
 import { computeUserId } from '@/lib/universalIdentity'
 
 const RAY_DECIMALS = 27
-const HF_DECIMALS = 18 // adjust if your contract scales HF differently
-const BIG_HF = 1e6 // anything above this renders as ∞
+export const HF_DECIMALS = 18 // adjust if your contract scales HF differently
+export const BIG_HF = 1e6 // anything above this renders as ∞
 
 type ChainKey = keyof typeof CHAINS
 
@@ -335,7 +335,7 @@ export default function BorrowPage() {
         borrowAmount,
         tokenToBeReceived,
         sendAddress,
-        CHAINS[sendChainKey].id
+        isZetaAthensDest
       )
       showToast(
         `Token Borrow Requested. Tx: ${receipt.transactionHash}\nThis will take a few seconds to reflect`

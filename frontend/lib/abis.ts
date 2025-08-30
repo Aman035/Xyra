@@ -23,6 +23,16 @@ export const ERC20_ABI = [
   },
 ] as const
 
+export const PRICE_ORACLE_ABI = [
+  {
+    type: 'function',
+    name: 'getAssetPrice',
+    stateMutability: 'view',
+    inputs: [{ name: 'asset', type: 'address' }],
+    outputs: [{ name: 'price', type: 'uint256' }],
+  },
+] as const
+
 export const LENDING_POOL_ABI = [
   {
     type: 'constructor',
@@ -1270,3 +1280,4 @@ export const EVM_GATEWAY_ABI = [
     type: 'function',
   },
 ] as const
+

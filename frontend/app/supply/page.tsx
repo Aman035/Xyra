@@ -18,9 +18,9 @@ import { CHAIN_ID_TO_CHAIN, CHAINS, VM } from '@/lib/chains'
 import { usePrivy, useSolanaWallets, useWallets } from '@privy-io/react-auth'
 import { supply } from '@/lib/lendingPool'
 
-const RAY_DECIMALS = 27
+export const RAY_DECIMALS = 27
 
-type UiRow = {
+export type UiRow = {
   symbol: string
   name: string
   logo: string
@@ -33,9 +33,9 @@ type UiRow = {
   loadingVault: boolean
 }
 
-type ChainKey = keyof typeof CHAINS
+export type ChainKey = keyof typeof CHAINS
 
-function pctLabel(n?: number | null, min = 2, max = 2) {
+export function pctLabel(n?: number | null, min = 2, max = 2) {
   if (n == null || !Number.isFinite(n)) return '—'
   if (n > 0 && n < 0.01) return '<0.01%'
   return `${n.toFixed(Math.min(Math.max(min, 0), Math.max(max, min)))}%`
