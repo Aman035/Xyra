@@ -25,6 +25,8 @@ contract LendingPool is ILendingPool, PoolConfigurationProvider, ReentrancyGuard
     // mapping(address => mapping(address => uint256)) internal userShares;
 
     mapping(bytes32 => mapping(address => uint256)) public userScaledShares;
+    mapping(bytes32 => mapping(address => uint256)) public userSupplied;
+    mapping(bytes32 => mapping(address => uint256)) public userDebt;
 
     /// @dev user => asset => debt amount
     // mapping(address => mapping(address => uint256)) internal userDebt;
@@ -107,6 +109,7 @@ contract LendingPool is ILendingPool, PoolConfigurationProvider, ReentrancyGuard
 
     function _supply(address asset, uint256 amount, UILib.UniversalIdentity memory sender, UILib.UniversalIdentity memory onBehalfOf) internal {
         bytes32 onBehalfOfUserId = UILib.computeUserId(onBehalfOf);
+        userSupplied[onBehalfOfUserId][asset] += amount;
         uint8 assetDecimals = ERC20(asset).decimals();
         uint256 scaledAmount = (amount * 1e18) / (10 ** assetDecimals);
 
@@ -148,6 +151,7 @@ contract LendingPool is ILendingPool, PoolConfigurationProvider, ReentrancyGuard
 
     function _withdraw(address asset, uint256 amount, UILib.UniversalIdentity memory sender, UILib.UniversalIdentity memory to, address withdrawAsset) internal returns (uint256) {
         bytes32 senderUserId = UILib.computeUserId(sender);
+        userSupplied[senderUserId][asset] -= amount;
         require(amount > 0, "LendingPool: amount 0");
 
         _updateLiquidityIndex(asset);
@@ -225,6 +229,7 @@ contract LendingPool is ILendingPool, PoolConfigurationProvider, ReentrancyGuard
 
     function _borrow(address asset, uint256 amount, UILib.UniversalIdentity memory sender, UILib.UniversalIdentity memory to, address withdrawAsset) internal {
         bytes32 senderUserId = UILib.computeUserId(sender);
+        userDebt[senderUserId][asset] += amount;
         require(amount > 0, "Amount 0");
 
         _updateLiquidityIndex(asset);
@@ -294,6 +299,7 @@ contract LendingPool is ILendingPool, PoolConfigurationProvider, ReentrancyGuard
 
     function _repay(address asset, uint256 amount, UILib.UniversalIdentity memory repayer, UILib.UniversalIdentity memory onBehalfOf) internal returns (uint256) {
         bytes32 onBehalfOfUserId = UILib.computeUserId(onBehalfOf);
+        userDebt[onBehalfOfUserId][asset] += amount;
         require(amount > 0, "LendingPool: amount is zero");
 
         _updateLiquidityIndex(asset);
@@ -446,6 +452,14 @@ contract LendingPool is ILendingPool, PoolConfigurationProvider, ReentrancyGuard
             uint256 collateralValueUsd = (underlyingAmount * price) / (10 ** decimals);
             totalCollateralUsd += collateralValueUsd;
         }
+    }
+
+    function getUserSuppliedAsset(bytes32 user, address asset) public view returns (uint256) {
+        return userSupplied[user][asset];
+    }
+
+    function getUserBorrowedAsset(bytes32 user, address asset) public view returns (uint256) {
+        return userDebt[user][asset];
     }
 
     function getUserTotalDebt(bytes32 user) public view returns (uint256 totalDebtUsd) {
