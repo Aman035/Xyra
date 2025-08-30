@@ -175,6 +175,40 @@ sequenceDiagram
 
 ---
 
+---
+
+## 🚀 Deployments
+
+### 🌐 Frontend
+
+The Xyra frontend is live on Vercel:  
+👉 [https://xyra-sigma.vercel.app/](https://xyra-sigma.vercel.app/)
+
+### ⛓️ Contracts (ZetaChain Testnet)
+
+- **LendingPool (Main)**  
+  [`0x3e89A980F8f160228Bc37E2f95ceF2c8d5e443b2`](https://athens.explorer.zetachain.com/address/0x3e89A980F8f160228Bc37E2f95ceF2c8d5e443b2)
+
+- AccessControlManager  
+  [`0x01335A08Fd2de2F57794E9DC081a11936F139DC1`](https://athens.explorer.zetachain.com/address/0x01335A08Fd2de2F57794E9DC081a11936F139DC1)
+
+- PriceOracle  
+  [`0xDd33f3F29f1D41FF7E82ce4bb861051DAE0a7e5E`](https://athens.explorer.zetachain.com/address/0xDd33f3F29f1D41FF7E82ce4bb861051DAE0a7e5E)
+
+- InterestRateManager  
+  [`0xe64e99D90a702d5F40b80730A8beE7F0B1c21186`](https://athens.explorer.zetachain.com/address/0xe64e99D90a702d5F40b80730A8beE7F0B1c21186)
+
+- CollateralManager  
+  [`0xa2A7B313Cc506c8D8887FCAbEbd58E4d1BE567Fe`](https://athens.explorer.zetachain.com/address/0xa2A7B313Cc506c8D8887FCAbEbd58E4d1BE567Fe)
+
+- PoolManager  
+  [`0xf76C0491B360Ce9625226C85A70b6C6516dFf7AF`](https://athens.explorer.zetachain.com/address/0xf76C0491B360Ce9625226C85A70b6C6516dFf7AF)
+
+- Swap  
+  [`0xDaC125f9350cD25786Cfd5c8eb2b6837c5e7Ce6B`](https://athens.explorer.zetachain.com/address/0xDaC125f9350cD25786Cfd5c8eb2b6837c5e7Ce6B)
+
+---
+
 ## 📊 Supported Networks
 
 | Action             | Sepolia | Base Sepolia | Zeta Athens | Solana Devnet |
