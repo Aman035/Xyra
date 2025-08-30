@@ -15,6 +15,7 @@ import {
   Globe,
   Link2,
 } from 'lucide-react'
+import Image from 'next/image'
 import { VAULTS } from '@/lib/vaults'
 import { PRICE_ORACLE_ABI } from '../lib/abis'
 
@@ -321,9 +322,20 @@ export default function Dashboard() {
                 className="flex items-center justify-between p-4 rounded-lg bg-gray-800 border border-gray-700"
               >
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full flex items-center justify-center">
+                  <div className="w-10 h-10 bg-gray-900 rounded-full flex items-center justify-center">
                     <span className="text-white font-bold text-sm">
-                      {market.symbol.slice(0, 2)}
+                      {market.logo ? (
+                        <Image
+                          src={market.logo}
+                          alt={market.name}
+                          width={16}
+                          height={16}
+                        />
+                      ) : (
+                        <span className="text-white text-lg">
+                          {market.symbol}
+                        </span>
+                      )}
                     </span>
                   </div>
                   <div>
@@ -373,9 +385,20 @@ export default function Dashboard() {
                 className="flex items-center justify-between p-4 rounded-lg bg-gray-800 border border-gray-700"
               >
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full flex items-center justify-center">
+                  <div className="w-10 h-10 bg-gray-900 rounded-full flex items-center justify-center">
                     <span className="text-white font-bold text-sm">
-                      {market.symbol.slice(0, 2)}
+                      {market.logo ? (
+                        <Image
+                          src={market.logo}
+                          alt={market.name}
+                          width={16}
+                          height={16}
+                        />
+                      ) : (
+                        <span className="text-white text-lg">
+                          {market.symbol}
+                        </span>
+                      )}
                     </span>
                   </div>
                   <div>
