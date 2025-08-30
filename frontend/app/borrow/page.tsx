@@ -13,7 +13,7 @@ import { useToast } from '@/components/ui/toast'
 
 import { VAULTS } from '@/lib/vaults'
 import { readContract } from '@/lib/viem'
-import { formatUnits, bytesToHex, padHex } from 'viem'
+import { formatUnits, parseUnits } from 'viem'
 import {
   CHAIN_ID_TO_CHAIN,
   CHAINS,
@@ -35,6 +35,7 @@ type BorrowRow = {
   name: string
   logo: string
   zrc20: `0x${string}`
+  decimals: number
   borrowApyPct: number | null
   borrowApy: string
   availableNum: number
@@ -78,6 +79,7 @@ export default function BorrowPage() {
         name: v.asset.name,
         logo: v.asset.logo,
         zrc20: v.zrc20TokenAddress as `0x${string}`,
+        decimals: v.asset.decimals,
         borrowApyPct: null,
         borrowApy: '—',
         availableNum: 0,
@@ -332,10 +334,10 @@ export default function BorrowPage() {
       const receipt = await borrow(
         currentWallet,
         selected.zrc20,
-        borrowAmount,
+        parseUnits(borrowAmount, selected.decimals),
         tokenToBeReceived,
         sendAddress,
-        isZetaAthensDest
+        CHAINS[sendChainKey].id
       )
       showToast(
         `Token Borrow Requested. Tx: ${receipt.transactionHash}\nThis will take a few seconds to reflect`

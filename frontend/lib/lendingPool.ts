@@ -59,19 +59,20 @@ export const supply = async (
 export const borrow = async (
   connectedWallet: any,
   borrowVaultZrc20: string,
-  vaultAmountBorrowed: string,
+  vaultAmountBorrowed: bigint,
   borrowTokenAddress: string,
-  onAddress: string
+  onAddress: string,
+  onAddressChainid: number
 ) => {
   const payload = utils.defaultAbiCoder.encode(
     ['string', 'bytes', 'uint256', 'address', 'address', 'uint256'],
     [
       'borrow',
       onAddress,
-      0, // withdraw chainId - automatically decided based on borrowTokenAddress
+      onAddressChainid, // withdraw chainId - automatically decided based on borrowTokenAddress
       borrowVaultZrc20,
       borrowTokenAddress,
-      parseEther(vaultAmountBorrowed), // TODO: Might need to change this acc to vault asset decimals
+      vaultAmountBorrowed,
     ]
   )
 
