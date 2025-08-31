@@ -13,6 +13,8 @@ Traditional lending protocols are siloed per chain - liquidity on Ethereum, Sola
 ![Home](./docs/home.png)
 ![Supply](./docs/supply.png)
 ![Borrow](./docs/borrow.png)
+![Withdraw](./docs/withdraw.png)
+![Repay](./docs/repay.png)
 ![Portfolio](./docs/portfolio.png)
 
 ---
